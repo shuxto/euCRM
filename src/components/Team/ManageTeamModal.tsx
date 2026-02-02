@@ -121,16 +121,21 @@ export default function ManageTeamModal({ leader, allUsers, onClose, onSuccess, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
-      <div className="bg-crm-bg border border-gray-800 w-full max-w-5xl rounded-2xl shadow-2xl flex flex-col h-[85vh] overflow-hidden">
+      {/* RESPONSIVE MODAL CONTAINER: 
+          - w-[95%] for mobile margin 
+          - sm:w-full max-w-4xl for tablet/desktop (Reduced from 5xl to be less 'huge')
+          - h-[80vh] for better vertical fit 
+      */}
+      <div className="bg-crm-bg border border-gray-800 w-[95%] sm:w-full max-w-4xl rounded-2xl shadow-2xl flex flex-col h-[80vh] overflow-hidden">
         
         {/* HEADER */}
-        <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 shrink-0">
+        <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 shrink-0">
           <div>
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <Briefcase className="text-cyan-400" size={18} /> 
                 Manage Team
             </h3>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">
                 Leader: <span className="text-cyan-400 font-bold">{leader.real_name}</span>
             </p>
           </div>
@@ -139,6 +144,7 @@ export default function ManageTeamModal({ leader, allUsers, onClose, onSuccess, 
           </button>
         </div>
 
+        {/* CONTENT GRID: Stacks on mobile, Side-by-side on MD+ */}
         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-800 min-h-0">
           
           {/* LEFT: AVAILABLE AGENTS (Multi-Select + Drag Source) */}

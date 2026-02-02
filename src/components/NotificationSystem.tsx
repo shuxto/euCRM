@@ -15,9 +15,19 @@ interface Toast {
 export default function NotificationSystem() {
   const [popups, setPopups] = useState<any[]>([]); // For Call Backs
   const [toasts, setToasts] = useState<Toast[]>([]); // For Status Updates
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // --- PART A: LISTENER FOR CALL BACKS (Your Code) ---
+  // --- 0. GET CURRENT USER (New Safety Check) ---
   useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setCurrentUserId(data.user.id);
+    });
+  }, []);
+
+  // --- PART A: LISTENER FOR CALL BACKS ---
+  useEffect(() => {
+    if (!currentUserId) return; // Wait until we know who is logged in
+
     const channel = supabase
       .channel('schema-db-changes')
       .on(
@@ -30,10 +40,14 @@ export default function NotificationSystem() {
         },
         (payload) => {
           const lead = payload.new;
+          
+          // --- SAFETY FIX: Only alert if this lead belongs to ME ---
+          if (lead.assigned_to !== currentUserId) return;
+
           const now = new Date();
           const callbackTime = new Date(lead.callback_time);
           
-          // Logic: If callback time is NOW (within last minute), trigger popup
+          // Trigger if time is within the last minute
           const diff = Math.abs(now.getTime() - callbackTime.getTime());
           if (diff < 60000) { 
              triggerPopup(lead);
@@ -45,18 +59,14 @@ export default function NotificationSystem() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [currentUserId]); 
 
-  // --- PART B: LISTENER FOR TOASTS (My Code) ---
+  // --- PART B: LISTENER FOR TOASTS ---
   useEffect(() => {
     const handleEvent = (event: any) => {
       const { message, type } = event.detail;
       const id = Date.now();
-      
-      // Add new toast
       setToasts(prev => [...prev, { id, message, type }]);
-
-      // Auto-remove toast after 3 seconds
       setTimeout(() => {
         setToasts(prev => prev.filter(t => t.id !== id));
       }, 3000);
@@ -84,9 +94,9 @@ export default function NotificationSystem() {
   };
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-4 pointer-events-none">
+    <div className="fixed top-4 right-4 z-100 flex flex-col gap-4 pointer-events-none">
       
-      {/* 1. TOAST NOTIFICATIONS (Small & Fast) */}
+      {/* 1. TOAST NOTIFICATIONS */}
       {toasts.map(toast => (
         <div 
           key={toast.id}
@@ -107,13 +117,12 @@ export default function NotificationSystem() {
         </div>
       ))}
 
-      {/* 2. CALL BACK ALERTS (Big & Loud) */}
+      {/* 2. CALL BACK ALERTS */}
       {popups.map((lead) => (
         <div 
           key={lead.id} 
           className="pointer-events-auto w-80 bg-[#1e293b]/95 backdrop-blur-xl border border-cyan-500/50 shadow-2xl rounded-2xl p-4 animate-in slide-in-from-right duration-500 relative overflow-hidden"
         >
-          {/* HEADER */}
           <div className="flex justify-between items-start mb-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center animate-pulse ring-1 ring-cyan-500/50">
@@ -131,8 +140,6 @@ export default function NotificationSystem() {
               <X size={14} />
             </button>
           </div>
-
-          {/* BODY */}
           <div className="space-y-2.5">
             <div className="flex justify-between items-end border-b border-white/5 pb-2">
               <p className="text-white text-sm font-bold truncate pr-2">{lead.name}</p>
@@ -141,8 +148,6 @@ export default function NotificationSystem() {
               </a>
             </div>
           </div>
-
-          {/* PROGRESS BAR */}
           <div className="absolute bottom-0 left-0 h-1 bg-cyan-500/50 w-full animate-[shrink_30s_linear_forwards]"></div>
         </div>
       ))}

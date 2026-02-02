@@ -99,3 +99,15 @@
 @keyframes fall {
   to { transform: translateY(100vh) rotate(720deg); }
 }
+
+/* --- BROADCAST TICKER ANIMATION (FIXED) --- */
+@keyframes marquee {
+  0% { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}
+
+.animate-marquee {
+  animation: marquee 20s linear infinite;
+  white-space: nowrap;
+  will-change: transform;
+}

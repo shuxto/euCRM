@@ -11,6 +11,8 @@ import Sidebar from './components/Sidebar';
 import NotificationSystem from './components/NotificationSystem';
 import LeadProfilePage from './components/LeadProfile';
 import ChatBubble from './components/Chat/ChatBubble';
+import GlobalAlertDisplay from './components/Broadcast/GlobalAlertDisplay';
+import BroadcastCenter from './components/Broadcast/BroadcastCenter';
 
 // PAGES
 import Dashboard from './pages/Dashboard';
@@ -116,6 +118,7 @@ export default function App() {
     <BrowserRouter>
       <div className="flex min-h-screen font-sans text-[#e2e8f0]">
         <NotificationSystem />
+        <GlobalAlertDisplay />
 
         {/* --- CHAT BUBBLE WIDGET --- */}
         {session?.user?.id && showBubble && (
@@ -139,6 +142,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard session={session} onLeadClick={setSelectedLead} />} />
             <Route path="/team" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><TeamManagement /></ProtectedRoute>} />
+            <Route path="/broadcast" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><BroadcastCenter /></ProtectedRoute>} />
             <Route path="/files" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><FileManager /></ProtectedRoute>} />
             <Route path="/shuffle" element={<ProtectedRoute allowedRoles={['admin', 'manager', 'team_leader']}><ShufflePage /></ProtectedRoute>} />
             <Route path="/splitter" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><SplitterPage /></ProtectedRoute>} />

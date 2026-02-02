@@ -6,6 +6,7 @@ import {
   Menu, ChevronLeft, ChevronRight,
   MessageCircle 
 } from 'lucide-react';
+import { Radio } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { NavLink, useLocation } from 'react-router-dom';
 import NotificationBell from './NotificationBell'; 
@@ -159,6 +160,7 @@ export default function Sidebar({ role, username, isCollapsed, onToggle, onOpenB
     },
     { path: '/team', label: 'Team', icon: Users, roles: ['admin', 'manager'] },
     { path: '/shuffle', label: 'Shuffle', icon: Shuffle, roles: ['admin', 'manager', 'team_leader'] },
+    { path: '/broadcast', label: 'Broadcast', icon: Radio, roles: ['admin', 'manager'] },
     { path: '/splitter', label: 'Splitter', icon: Split, roles: ['admin', 'manager'] },
     { path: '/files', label: 'Files', icon: FolderOpen, roles: ['admin', 'manager'] },
     { path: '/calls', label: 'Call Logs', icon: Phone, roles: ['admin', 'manager'] },
@@ -223,19 +225,33 @@ export default function Sidebar({ role, username, isCollapsed, onToggle, onOpenB
             {filteredMenu.map((item) => (
               <NavLink
                 key={item.path}
-                to={item.path}
+                to={item.path}         
                 onClick={() => {
                     setIsMobileOpen(false);
                     if (item.path === '/chat') clearGlobal();
                 }}
-                className={({ isActive }) => `
-                  w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group cursor-pointer relative
-                  ${isCollapsed ? 'justify-center' : ''}
-                  ${isActive 
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20 translate-x-1' 
-                    : 'text-gray-400 hover:bg-white/5 hover:text-white hover:translate-x-1'
+                className={({ isActive }) => {
+                  // Special Style for Broadcast
+                  if (item.path === '/broadcast') {
+                      return `
+                        w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group cursor-pointer relative
+                        ${isCollapsed ? 'justify-center' : ''}
+                        ${isActive 
+                          ? 'bg-linear-to-r from-red-600 to-orange-600 text-white shadow-lg shadow-red-900/20 translate-x-1' 
+                          : 'text-gray-400 hover:bg-white/5 hover:text-white hover:translate-x-1'
+                        }
+                      `;
                   }
-                `}
+                  // Default Style for others
+                  return `
+                    w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group cursor-pointer relative
+                    ${isCollapsed ? 'justify-center' : ''}
+                    ${isActive 
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20 translate-x-1' 
+                      : 'text-gray-400 hover:bg-white/5 hover:text-white hover:translate-x-1'
+                    }
+                  `;
+                }}
                 title={isCollapsed ? item.label : undefined}
               >
                 <div className="relative">
