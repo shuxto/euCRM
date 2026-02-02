@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { Radio } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { Gamepad2 } from 'lucide-react';
+import Game2048 from './Game/Game2048';
 import { NavLink, useLocation } from 'react-router-dom';
 import NotificationBell from './NotificationBell'; 
 import { GLOBAL_CHAT_ID } from '../constants';
@@ -33,6 +35,7 @@ export default function Sidebar({ role, username, isCollapsed, onToggle, onOpenB
   // --- NEW STATE FOR PROFILE ---
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showGame, setShowGame] = useState(false);
 
   const location = useLocation();
   const locationRef = useRef(location);
@@ -272,6 +275,18 @@ export default function Sidebar({ role, username, isCollapsed, onToggle, onOpenB
           </nav>
 
           <div className={`mt-auto pt-6 border-t border-white/5 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
+
+          {/* GAME BUTTON */}
+             <button 
+                onClick={() => setShowGame(true)}
+                className={`mb-3 w-full bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 text-purple-300 hover:text-white rounded-lg transition flex items-center justify-center relative ${isCollapsed ? 'p-2' : 'py-2 gap-2'}`}
+                title="Play 2048"
+             >
+                <div className="relative">
+                    <Gamepad2 size={18} className="animate-pulse" />
+                </div>
+                {!isCollapsed && <span className="text-sm font-bold">Championship</span>}
+             </button>
               
              <button 
                 onClick={clearDM} 
@@ -346,6 +361,15 @@ export default function Sidebar({ role, username, isCollapsed, onToggle, onOpenB
 
       {/* --- PROFILE MODAL --- */}
       {showProfileModal && <ProfileSettingsModal onClose={() => setShowProfileModal(false)} />}
+
+        {/* --- GAME MODAL --- */}
+      {showGame && userId && (
+        <Game2048 
+            onClose={() => setShowGame(false)} 
+            currentUserRole={role} 
+            currentUserId={userId} 
+        />
+      )}
     </>
   );
 }
