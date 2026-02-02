@@ -12,7 +12,7 @@ import LeadFinancials from './LeadFinancials';
 import TradingAccountsTab from './TradingAccountsTab'; 
 
 // ⚠️ API KEY from twelwedata.ts
-const MARKET_SOCKET_URL = "wss://trading-production-169d.up.railway.app";
+const MARKET_SOCKET_URL = "wss://trading-copy-production.up.railway.app";
 
 interface LeadProfilePageProps {
   lead: any;
