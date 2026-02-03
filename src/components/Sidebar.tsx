@@ -4,7 +4,8 @@ import {
   LogOut, Shield, Briefcase, 
   Shuffle, Split, FolderOpen,
   Menu, ChevronLeft, ChevronRight,
-  MessageCircle 
+  MessageCircle,
+  Bot 
 } from 'lucide-react';
 import { Radio } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -21,10 +22,19 @@ interface SidebarProps {
   isCollapsed: boolean; 
   onToggle: () => void; 
   onOpenBubble: () => void; 
+  onOpenAi: () => void; // <--- MAKE SURE THIS IS HERE
   activeBubbleRoom: string | null; 
 }
 
-export default function Sidebar({ role, username, isCollapsed, onToggle, onOpenBubble, activeBubbleRoom }: SidebarProps) {
+export default function Sidebar({ 
+  role, 
+  username, 
+  isCollapsed, 
+  onToggle, 
+  onOpenBubble, 
+  onOpenAi, // <--- MAKE SURE THIS IS HERE
+  activeBubbleRoom 
+}: SidebarProps) {
   const [userId, setUserId] = useState<string | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false); 
   
@@ -203,9 +213,11 @@ export default function Sidebar({ role, username, isCollapsed, onToggle, onOpenB
             {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div className="p-6 flex flex-col h-full">
+        {/* PRO FIX: Reduced padding (p-4) to fit smaller laptop screens */}
+        <div className="p-4 flex flex-col h-full overflow-hidden">
           
-          <div className={`flex items-center mb-8 transition-all ${isCollapsed ? 'justify-center flex-col gap-4' : 'justify-between'}`}>
+          {/* PRO FIX: Reduced margin (mb-4) and added shrink-0 so header never squishes */}
+          <div className={`flex items-center mb-4 shrink-0 transition-all ${isCollapsed ? 'justify-center flex-col gap-4' : 'justify-between'}`}>
               <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0">
                       <Briefcase size={18} className="text-white" />
@@ -224,7 +236,8 @@ export default function Sidebar({ role, username, isCollapsed, onToggle, onOpenB
               )}
           </div>
 
-          <nav className="space-y-1 flex-1">
+          {/* PRO FIX: Scrollable but with HIDDEN scrollbar (Looks clean, works on all screens) */}
+          <nav className="space-y-1 flex-1 overflow-y-auto min-h-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {filteredMenu.map((item) => (
               <NavLink
                 key={item.path}
@@ -275,6 +288,21 @@ export default function Sidebar({ role, username, isCollapsed, onToggle, onOpenB
           </nav>
 
           <div className={`mt-auto pt-6 border-t border-white/5 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
+
+             {/* AI ASSISTANT BUTTON */}
+             <button 
+                onClick={() => {
+                    console.log("AI Button Clicked"); // <--- Debug check
+                    onOpenAi();
+                }}
+                className={`mb-3 w-full bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 hover:text-white rounded-lg transition flex items-center justify-center relative ${isCollapsed ? 'p-2' : 'py-2 gap-2'}`}
+                title="AI Assistant"
+             >
+                <div className="relative">
+                    <Bot size={18} />
+                </div>
+                {!isCollapsed && <span className="text-sm font-bold">AI Assistant</span>}
+             </button>
 
           {/* GAME BUTTON */}
              <button 

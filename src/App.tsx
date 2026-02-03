@@ -23,6 +23,7 @@ import ShufflePage from './components/Shuffle';
 import CallsPage from './components/Calls';
 import SplitterPage from './components/Splitter';
 import ChatPage from './pages/ChatPage';
+import AiAssistant from './components/Chat/AiAssistant';
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -40,6 +41,9 @@ export default function App() {
   // --- NEW: This fixes the Red Dot issue ---
   // It tracks which room you are currently looking at.
   const [activeBubbleRoom, setActiveBubbleRoom] = useState<string | null>(null); 
+// --- AI ASSISTANT STATE ---
+  const [showAi, setShowAi] = useState(false);
+  const [minimizeAi, setMinimizeAi] = useState(false);
 
   // --- NEW: Auto-save Selected Lead when it changes ---
   useEffect(() => {
@@ -104,20 +108,13 @@ export default function App() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-white">Loading System...</div>;
   if (!session) return <LoginPage />;
-  
-  if (selectedLead) {
-    return (
-      <div className="min-h-screen text-[#e2e8f0]">
-        <LeadProfilePage lead={selectedLead} onBack={() => setSelectedLead(null)} />
-      </div>
-    );
-  }
 
   const currentRole = session.user.user_metadata?.role || 'conversion';
 
   return (
     <BrowserRouter>
       <div className="flex min-h-screen font-sans text-[#e2e8f0]">
+        {/* --- GLOBAL WATCHERS (Always Active) --- */}
         <NotificationSystem />
         <GlobalAlertDisplay />
 
@@ -129,11 +126,28 @@ export default function App() {
             <ChatBubble 
                 currentUserId={session.user.id} 
                 onClose={() => { setShowBubble(false); setActiveBubbleRoom(null); }} 
-                onRoomChange={setActiveBubbleRoom} // <--- Important: This tells App where you are
+                onRoomChange={setActiveBubbleRoom} 
             />
         )}
 
+{/* --- AI ASSISTANT WIDGET --- */}
+        {session?.user?.id && showAi && (
+            <AiAssistant 
+                userId={session.user.id}
+                onClose={() => setShowAi(false)}
+                minimized={minimizeAi}
+                onToggleMinimize={() => setMinimizeAi(!minimizeAi)}
+            />
+        )}
+
+        {selectedLead ? (
+            <div className="w-full relative z-10">
+                <LeadProfilePage lead={selectedLead} onBack={() => setSelectedLead(null)} />
+            </div>
+        ) : (
+            <>
         <Sidebar 
+            onOpenAi={() => { setShowAi(true); setMinimizeAi(false); }}
             role={currentRole} 
             username={session.user.email || 'User'} 
             isCollapsed={isSidebarCollapsed}
@@ -158,6 +172,8 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
+            </>
+        )}
       </div>
     </BrowserRouter>
   );
