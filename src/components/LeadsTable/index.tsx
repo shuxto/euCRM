@@ -54,6 +54,12 @@ export default function LeadsTable({ role = 'admin', filters, onLeadClick, onPag
   const showCheckbox = isAdmin || isManager;
   const showAssign = isAdmin || isManager;
   const showDelete = isAdmin || isManager;
+  const showActions = role !== 'conversion';
+
+  const totalColumns = 7 
+    + (showCheckbox ? 1 : 0) 
+    + (showAssign ? 1 : 0) 
+    + (showActions ? 1 : 0);
 
   const currentPage = filters?.page || 1;
   const limit = filters?.limit || 50;
@@ -210,13 +216,12 @@ export default function LeadsTable({ role = 'admin', filters, onLeadClick, onPag
               <th className="p-4 text-center w-40">Status</th>
               {showAssign && <th className="p-4 hidden md:table-cell">Assigned To</th>}
               <th className="p-4 text-center">Notes</th>
-              <th className="p-4 text-center">Actions</th>
-              {showDelete && <th className="p-4 text-center">Del</th>}
+              {showActions && <th className="p-4 text-center">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/50">
             {leads.length === 0 ? (
-                <tr><td colSpan={11} className="p-8 text-center text-gray-500 italic">No leads found matching your filters.</td></tr>
+                <tr><td colSpan={totalColumns} className="p-8 text-center text-gray-500 italic">No leads found matching your filters.</td></tr>
             ) : leads.map((lead: Lead, index: number) => (
               <LeadsTableRow 
                 key={lead.id}

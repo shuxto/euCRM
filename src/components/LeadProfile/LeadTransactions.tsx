@@ -27,13 +27,14 @@ export default function LeadTransactions({ lead }: Props) {
   const fetchTransactions = async () => {
     setLoading(true);
     
-    // 👇 UPDATED QUERY: We now fetch the 'email' from the 'profiles' table
+    // 👇 UPDATED QUERY: We now fetch info from 'crm_users'
     const { data, error } = await supabase
         .from('transactions')
         .select(`
             *,
             performer:performed_by (
-                email
+                email,
+                real_name
             )
         `)
         .eq('user_id', lead.trading_account_id)
@@ -153,12 +154,12 @@ export default function LeadTransactions({ lead }: Props) {
                             const displayMethod = tx.method || 'System';
                             const isPositive = ['deposit', 'bonus', 'relay_in', 'external_deposit', 'profit'].includes(tx.type);
                             
-                            // 👇 Logic to find the email
-                            // 1. Try fetched profile email
-                            // 2. Try direct column
+                            // 👇 Logic to find the Agent Name
+                            // 1. Try fetched real_name (Best)
+                            // 2. Try fetched email
                             // 3. Fallback to ID
-                            const performerEmail = tx.performer?.email || tx.performed_by_email;
-                            const performerDisplay = performerEmail || (tx.performed_by ? `${tx.performed_by.slice(0, 8)}...` : null);
+                            const performerName = tx.performer?.real_name || tx.performer?.email || tx.performed_by_email;
+                            const performerDisplay = performerName || (tx.performed_by ? `${tx.performed_by.slice(0, 8)}...` : null);
 
                             return (
                                 <tr key={tx.id} className="hover:bg-white/5 transition-colors">

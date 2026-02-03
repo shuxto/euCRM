@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Phone, Mail, Eye, MessageSquare, Trash2, ShieldCheck, ShieldAlert, Shield, Loader2 } from 'lucide-react';
+import { Phone, Mail, Eye, MessageSquare, ShieldCheck, ShieldAlert, Shield, Loader2 } from 'lucide-react';
 import { type Lead } from '../../hooks/useLeads';
 import StatusCell from './StatusCell';
 import AssignAgentCell from './AssignAgentCell';
@@ -28,13 +28,14 @@ interface LeadsTableRowProps {
 
 export default function LeadsTableRow({
   lead, isSelected, isVanishing, role,
-  showCheckbox, showAssign, showDelete,
+  showCheckbox, showAssign,
   statusOptions, agents,
-  toggleSelectOne, onLeadClick, setKycLead, setActiveNoteLead, handleDeleteClick,
+  toggleSelectOne, onLeadClick, setKycLead, setActiveNoteLead,
   onStatusUpdateInterceptor, updateLeadAgent, rowIndex, totalRows
 }: LeadsTableRowProps) {
   
   const [isCalling, setIsCalling] = useState(false);
+  const showActions = role !== 'conversion';
 
   const handleQuickCall = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -156,24 +157,14 @@ export default function LeadsTableRow({
           </button>
       </td>
 
-      <td className="p-4 text-center">
-        <button 
-            onClick={() => onLeadClick(lead)} 
-            // 5. ADDED POINTER
-            className="p-1.5 bg-blue-600/10 text-blue-400 border border-blue-500/30 hover:bg-blue-600 hover:text-white rounded-lg transition-all shadow-lg shadow-blue-500/10 cursor-pointer"
-        >
-          <Eye size={14} />
-        </button>
-      </td>
-      
-      {showDelete && (
+      {showActions && (
         <td className="p-4 text-center">
           <button 
-            onClick={() => handleDeleteClick(lead)} 
-            // 6. ADDED POINTER
-            className="text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition p-1.5 rounded-lg cursor-pointer"
+              onClick={() => onLeadClick(lead)} 
+              // 5. ADDED POINTER
+              className="p-1.5 bg-blue-600/10 text-blue-400 border border-blue-500/30 hover:bg-blue-600 hover:text-white rounded-lg transition-all shadow-lg shadow-blue-500/10 cursor-pointer"
           >
-            <Trash2 size={14} />
+            <Eye size={14} />
           </button>
         </td>
       )}
