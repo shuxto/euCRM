@@ -165,11 +165,25 @@ export function useLeads(filters: any, currentUserId?: string) {
   };
 
   const deleteLead = async (leadId: string) => {
-    const { error } = await supabase.from('crm_leads').delete().eq('id', leadId);
-    if (error) return false;
-    setLeads(prev => prev.filter(l => l.id !== leadId));
-    setTotalCount(prev => prev - 1);
-    return true;
+    try {
+        // 1. Delete Notifications first
+        await supabase.from('crm_notifications').delete().eq('related_lead_id', leadId);
+        
+        // 2. Delete the Lead
+        const { error } = await supabase.from('crm_leads').delete().eq('id', leadId);
+        
+        if (error) {
+            console.error("Delete failed:", error);
+            return false;
+        }
+
+        setLeads(prev => prev.filter(l => l.id !== leadId));
+        setTotalCount(prev => prev - 1);
+        return true;
+    } catch (err) {
+        console.error("Error deleting lead:", err);
+        return false;
+    }
   };
 
   const bulkUpdateStatus = async (ids: string[], status: string) => {
@@ -185,11 +199,42 @@ export function useLeads(filters: any, currentUserId?: string) {
   };
 
   const bulkDeleteLeads = async (ids: string[]) => {
-    const { error } = await supabase.from('crm_leads').delete().in('id', ids);
-    if (error) return false;
-    setLeads(prev => prev.filter(l => !ids.includes(l.id)));
-    setTotalCount(prev => prev - ids.length);
-    return true;
+    try {
+        // Process in chunks of 50 to avoid "URI Too Long" errors
+        const chunkSize = 50;
+        
+        for (let i = 0; i < ids.length; i += chunkSize) {
+            const chunk = ids.slice(i, i + chunkSize);
+            
+            // 1. Delete Notifications for this chunk
+            const { error: notifError } = await supabase
+                .from('crm_notifications')
+                .delete()
+                .in('related_lead_id', chunk);
+                
+            if (notifError) {
+                console.error("Error deleting notifications for chunk:", notifError);
+                // Continue to try deleting leads anyway, or throw
+            }
+
+            // 2. Delete Leads for this chunk
+            const { error: leadError } = await supabase
+                .from('crm_leads')
+                .delete()
+                .in('id', chunk);
+
+            if (leadError) throw leadError;
+        }
+
+        // Update local state after loop finishes
+        setLeads(prev => prev.filter(l => !ids.includes(l.id)));
+        setTotalCount(prev => prev - ids.length);
+        return true;
+
+    } catch (err) {
+        console.error("Error bulk deleting:", err);
+        return false;
+    }
   };
 
   return { 

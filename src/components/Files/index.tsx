@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import Papa from 'papaparse';
 // REMOVED: import * as XLSX from 'xlsx'; <--- We removed this heavy import
-import { FileSpreadsheet, UploadCloud, Search, Trash2, Download, CheckCircle, Loader2, FolderOpen } from 'lucide-react';
+import { FileSpreadsheet, UploadCloud, Search, Trash2, Download, CheckCircle, Loader2, FolderOpen, UserPlus } from 'lucide-react';
+import ManualEntry from './ManualEntry'; // <--- Import the new file
 
 // --- TYPES ---
 interface FolderStat {
@@ -82,7 +83,7 @@ const parseFile = async (file: File): Promise<{ data: any[], fields: string[] }>
 };
 
 export default function FileManager() {
-  const [activeTab, setActiveTab] = useState<'check' | 'upload' | 'manage'>('check');
+  const [activeTab, setActiveTab] = useState<'check' | 'upload' | 'manage' | 'manual'>('check');
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
@@ -248,13 +249,29 @@ export default function FileManager() {
     if (activeTab === 'manage') fetchFolders();
   }, [activeTab]);
 
-  // Manage Actions
+ // Manage Actions
   const deleteFolder = async (folderName: string) => {
     if(!confirm(`Are you sure you want to delete folder: ${folderName}? This cannot be undone.`)) return;
     
-    const { error } = await supabase.from('crm_leads').delete().eq('source_file', folderName);
-    if(error) alert('Error: ' + error.message);
-    else fetchFolders();
+    setLoading(true); // Show loading spinner
+    try {
+        // Call the "Sudo" function we just created
+        const { error } = await supabase.rpc('delete_source_file', { 
+            file_name: folderName 
+        });
+
+        if (error) throw error;
+
+        // Success!
+        fetchFolders();
+        alert(`Folder "${folderName}" deleted successfully.`);
+
+    } catch (error: any) {
+        alert('Error: ' + error.message);
+        console.error(error);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const downloadFolder = async (folderName: string) => {
@@ -290,7 +307,8 @@ export default function FileManager() {
         {[
             { id: 'check', label: 'Check File', icon: Search },
             { id: 'upload', label: 'Upload File', icon: UploadCloud },
-            { id: 'manage', label: 'Manage Files', icon: FileSpreadsheet }
+            { id: 'manage', label: 'Manage Files', icon: FileSpreadsheet },
+            { id: 'manual', label: 'Manual Entry', icon: UserPlus } // <--- New Tab
         ].map(tab => (
             <button
                 key={tab.id}
@@ -456,7 +474,8 @@ export default function FileManager() {
             </div>
         </div>
       )}
-
+      {/* --- TAB CONTENT: MANUAL --- */}
+      {activeTab === 'manual' && <ManualEntry />}
     </div>
   );
 }
