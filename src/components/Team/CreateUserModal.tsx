@@ -74,6 +74,8 @@ export default function CreateUserModal({ onClose, onSuccess }: Props) {
               <option value="conversion" className="bg-slate-900">Conversion (Agent)</option>
               <option value="retention" className="bg-slate-900">Retention</option>
               <option value="team_leader" className="bg-slate-900">Team Leader</option>
+              <option value="conversion_leader" className="bg-slate-900">Conversion Leader</option>
+              <option value="retention_leader" className="bg-slate-900">Retention Leader</option>
               <option value="manager" className="bg-slate-900">Manager</option>
               <option value="compliance" className="bg-slate-900">Compliance</option>
               <option value="admin" className="bg-slate-900">Admin</option>

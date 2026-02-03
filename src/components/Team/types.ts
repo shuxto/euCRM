@@ -4,7 +4,7 @@ export interface CRMUser {
   id: string;
   email: string;
   real_name: string;
-  role: 'admin' | 'manager' | 'compliance' | 'team_leader' | 'conversion' | 'retention';
+  role: 'admin' | 'manager' | 'compliance' | 'team_leader' | 'conversion_leader' | 'retention_leader' | 'conversion' | 'retention';
   team_leader_id?: string | null;
   allowed_sources?: string; // "Google,Facebook"
   is_synced?: boolean;      // Calculated (true if exists in 'profiles')

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { 
-  Users, Crown, Briefcase, Key, Headset, Phone, ShieldAlert, UserPlus, Loader2, Search
+  Users, Crown, Briefcase, Key, Headset, Phone, ShieldAlert, UserPlus, Loader2, Search, Megaphone, ShieldCheck
 } from 'lucide-react';
 import type { CRMUser } from './types';
 
@@ -129,6 +129,8 @@ export default function TeamManagement() {
     admin: users.filter(u => u.role === 'admin').length,
     manager: users.filter(u => u.role === 'manager').length,
     leader: users.filter(u => u.role === 'team_leader').length,
+    conversion_leader: users.filter(u => u.role === 'conversion_leader').length,
+    retention_leader: users.filter(u => u.role === 'retention_leader').length,
     conversion: users.filter(u => u.role === 'conversion').length,
     retention: users.filter(u => u.role === 'retention').length,
     compliance: users.filter(u => u.role === 'compliance').length,
@@ -160,7 +162,7 @@ export default function TeamManagement() {
 
       {/* TABS */}
       <div className="flex border-b border-gray-700 mb-8 overflow-x-auto custom-scrollbar">
-        {[{ id: 'staff', label: 'All Staff', icon: Users }, { id: 'admins', label: 'Admins', icon: Crown }, { id: 'managers', label: 'Managers', icon: Key }, { id: 'leaders', label: 'Team Leaders', icon: Briefcase }, { id: 'conversion', label: 'Conversion', icon: Headset }, { id: 'retention', label: 'Retention', icon: Phone }, { id: 'compliance', label: 'Compliance', icon: ShieldAlert }].map(tab => (
+        {[{ id: 'staff', label: 'All Staff', icon: Users }, { id: 'admins', label: 'Admins', icon: Crown }, { id: 'managers', label: 'Managers', icon: Key }, { id: 'leaders', label: 'Team Leaders', icon: Briefcase }, { id: 'conversion_leader', label: 'Conv. Leader', icon: Megaphone }, { id: 'retention_leader', label: 'Ret. Leader', icon: ShieldCheck }, { id: 'conversion', label: 'Conversion', icon: Headset }, { id: 'retention', label: 'Retention', icon: Phone }, { id: 'compliance', label: 'Compliance', icon: ShieldAlert }].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-6 py-4 font-bold text-sm transition flex items-center gap-2 border-b-2 whitespace-nowrap cursor-pointer ${activeTab === tab.id ? 'border-cyan-500 text-cyan-400 bg-cyan-500/5' : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}><tab.icon size={16} /> {tab.label}</button>
         ))}
       </div>

@@ -60,6 +60,8 @@ export default function TeamTable({
                 admin: 'bg-red-500/10 text-red-400 border-red-500/20',
                 manager: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
                 team_leader: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+                conversion_leader: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                retention_leader: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
                 retention: 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20',
                 compliance: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
                 conversion: 'bg-green-500/10 text-green-400 border-green-500/20',
@@ -94,7 +96,7 @@ export default function TeamTable({
 
                   {/* 3. PLATFORM */}
                   <td className="p-5">
-                    {['admin', 'manager', 'compliance'].includes(user.role) ? (
+                    {['admin', 'manager', 'team_leader', 'conversion_leader', 'retention_leader', 'retention'].includes(user.role) ? (
                         user.is_synced ? (
                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold">
                             <CheckCircle2 size={12} /> Linked
@@ -111,7 +113,7 @@ export default function TeamTable({
 
                   {/* 4. MANAGEMENT */}
                   <td className="p-5">
-                    {user.role === 'team_leader' && (
+                    {['team_leader', 'conversion_leader', 'retention_leader'].includes(user.role) && (
                         <button onClick={() => onManageLeader?.(user)} className="flex items-center gap-2 bg-cyan-900/30 hover:bg-cyan-600 text-cyan-400 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition border border-cyan-500/30 hover:border-cyan-500 shadow-lg shadow-cyan-900/10">
                             <Users size={12} /> Manage Team
                         </button>
@@ -126,7 +128,7 @@ export default function TeamTable({
 
                   {/* 5. DETAILS */}
                   <td className="p-5">
-                    {user.role === 'team_leader' ? (
+                    {['team_leader', 'conversion_leader', 'retention_leader'].includes(user.role) ? (
                       <div className="text-white font-bold flex items-center gap-1"><Users size={14} className="text-cyan-500"/> {teamSize} <span className="text-gray-500 font-normal text-xs">Agents</span></div>
                     ) : user.role === 'manager' ? (
                       <div className="text-white font-bold flex items-center gap-1"><Briefcase size={14} className="text-purple-500"/> {folderCount} <span className="text-gray-500 font-normal text-xs">Sources</span></div>
