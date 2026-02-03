@@ -13,52 +13,27 @@ interface Toast {
 }
 
 export default function NotificationSystem() {
-  const [popups, setPopups] = useState<any[]>([]); // For Call Backs
-  const [toasts, setToasts] = useState<Toast[]>([]); // For Status Updates
+  const [popups, setPopups] = useState<any[]>([]); // For Call Backs (Blue Box)
+  const [toasts, setToasts] = useState<Toast[]>([]); // For Status Updates (Small Toast)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  // --- 0. GET CURRENT USER (New Safety Check) ---
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setCurrentUserId(data.user.id);
     });
   }, []);
 
-  // --- PART A: LISTENER FOR CALL BACKS ---
+  // --- PART A: LISTENER FOR CALL BACKS (MODIFIED) ---
   useEffect(() => {
-    if (!currentUserId) return; // Wait until we know who is logged in
-
-    const channel = supabase
-      .channel('schema-db-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'crm_leads',
-          filter: 'status=eq.Call Back', 
-        },
-        (payload) => {
-          const lead = payload.new;
-          
-          // --- SAFETY FIX: Only alert if this lead belongs to ME ---
-          if (lead.assigned_to !== currentUserId) return;
-
-          const now = new Date();
-          const callbackTime = new Date(lead.callback_time);
-          
-          // Trigger if time is within the last minute
-          const diff = Math.abs(now.getTime() - callbackTime.getTime());
-          if (diff < 60000) { 
-             triggerPopup(lead);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
+    const handleCallbackAlert = (event: any) => {
+       const lead = event.detail;
+       if (currentUserId && lead.assigned_to === currentUserId) {
+           triggerPopup(lead);
+       }
     };
+
+    window.addEventListener('crm-callback-trigger', handleCallbackAlert);
+    return () => window.removeEventListener('crm-callback-trigger', handleCallbackAlert);
   }, [currentUserId]); 
 
   // --- PART B: LISTENER FOR TOASTS ---
@@ -79,9 +54,15 @@ export default function NotificationSystem() {
   // --- TRIGGERS ---
   const triggerPopup = (lead: any) => {
     if (localStorage.getItem('dismissed_cb_' + lead.id)) return;
+    
     notifSound.play().catch(e => console.log('Sound blocked:', e));
-    setPopups((prev) => [...prev, lead]);
-    setTimeout(() => { removePopup(lead.id); }, 30000);
+    
+    setPopups((prev) => {
+        if (prev.find(p => p.id === lead.id)) return prev;
+        return [...prev, lead];
+    });
+
+    setTimeout(() => { removePopup(lead.id); }, 60000);
   };
 
   const removePopup = (id: number) => {
@@ -94,7 +75,8 @@ export default function NotificationSystem() {
   };
 
   return (
-    <div className="fixed top-4 right-4 z-100 flex flex-col gap-4 pointer-events-none">
+    // FIX: Changed z-[9999] to z-9999
+    <div className="fixed top-4 right-4 z-9999 flex flex-col gap-4 pointer-events-none">
       
       {/* 1. TOAST NOTIFICATIONS */}
       {toasts.map(toast => (
@@ -142,15 +124,22 @@ export default function NotificationSystem() {
           </div>
           <div className="space-y-2.5">
             <div className="flex justify-between items-end border-b border-white/5 pb-2">
-              <p className="text-white text-sm font-bold truncate pr-2">{lead.name}</p>
+              <p className="text-white text-sm font-bold truncate pr-2">{lead.name} {lead.surname}</p>
               <a href={`sip:${lead.phone}`} className="text-green-400 hover:text-green-300 text-xs font-mono bg-green-900/20 px-2 py-1 rounded border border-green-500/30 transition flex items-center gap-1">
                 <Phone size={10} /> Call
               </a>
             </div>
           </div>
-          <div className="absolute bottom-0 left-0 h-1 bg-cyan-500/50 w-full animate-[shrink_30s_linear_forwards]"></div>
+          <div className="absolute bottom-0 left-0 h-1 bg-cyan-500/50 w-full animate-[shrink_60s_linear_forwards]"></div>
         </div>
       ))}
+
+      <style>{`
+        @keyframes shrink {
+          from { width: 100%; }
+          to { width: 0%; }
+        }
+      `}</style>
     </div>
   );
 }

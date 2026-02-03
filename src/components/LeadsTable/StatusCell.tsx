@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Check } from 'lucide-react';
-import { supabase } from '../../lib/supabase'; // <--- IMPORT SUPABASE
+import { ChevronDown, Check, Clock, AlertTriangle } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 import { type Lead } from '../../hooks/useLeads';
+import CallBackModal from './CallBackModal';
 
 interface StatusCellProps {
-  lead: Lead;
+  // FIX: We add callback_time manually here so TypeScript stops complaining
+  lead: Lead & { callback_time?: string | null }; 
   options: any[];
   onUpdate: (id: string, newStatus: string) => void;
   role?: string;
@@ -20,8 +22,100 @@ const hexToRgba = (hex: string, alpha: number) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+// Helper to calculate time left
+const getTimeStatus = (dateStr: string | null) => {
+  if (!dateStr) return { text: "NO TIME", color: "text-slate-400", isOverdue: false };
+  
+  const target = new Date(dateStr).getTime();
+  const now = new Date().getTime();
+  const diff = target - now;
+
+  // IMMEDIATE OVERDUE CHECK
+  if (diff <= 0) return { text: "OVERDUE", color: "text-red-500 font-bold animate-pulse", isOverdue: true };
+
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+  
+  if (hours > 24) return { text: `${Math.floor(hours / 24)}d left`, color: "text-blue-400", isOverdue: false };
+  // Show seconds if less than 5 minutes left
+  if (hours === 0 && minutes < 5) return { text: `${minutes}m ${seconds}s`, color: "text-orange-400", isOverdue: false };
+  return { text: `${hours}h ${minutes}m`, color: "text-emerald-400", isOverdue: false };
+};
+
 export default function StatusCell({ lead, options, onUpdate, role }: StatusCellProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  
+  // FIX 1: Local State for "Instant" updates (Optimistic UI)
+  const [optimisticDate, setOptimisticDate] = useState(lead.callback_time);
+
+  const [timeStatus, setTimeStatus] = useState(getTimeStatus(lead.callback_time || null));
+
+  // Sync local state if parent prop updates (e.g. from DB refetch)
+  useEffect(() => {
+    setOptimisticDate(lead.callback_time);
+  }, [lead.callback_time]);
+
+  // Update the timer every second
+  useEffect(() => {
+    const isCallBack = lead.status === 'call_back' || lead.status === 'Call Back';
+
+    // FIX: Timer now depends on optimisticDate
+    if (isCallBack && optimisticDate) {
+      const interval = setInterval(() => {
+        // @ts-ignore
+        setTimeStatus(getTimeStatus(optimisticDate));
+      }, 1000); 
+      return () => clearInterval(interval);
+    }
+  }, [lead.status, optimisticDate]);
+
+  const handleCallbackConfirm = async (date: string | null) => {
+    // 1. Force UI Update Immediately (Visual Feedback)
+    setTimeStatus(getTimeStatus(date));
+    setOptimisticDate(date); // <--- Forces timer to update instantly
+
+    // 2. RESET TOAST MEMORY (Fixes the "Toast won't come back" bug)
+    // If I schedule a new time, I want to be alerted again!
+    localStorage.removeItem('dismissed_cb_' + lead.id);
+
+    // 3. Prepare Data
+    const finalDate = date ? new Date(date).toISOString() : null;
+
+    // 4. FIND THE CORRECT STATUS STRING
+    const validCallBackStatus = options.find(o => 
+        o.label.toLowerCase().replace(/_/g, ' ') === 'call back' || 
+        o.label.toLowerCase() === 'callback'
+    )?.label || 'Call Back'; 
+
+    // 4. SINGLE DB UPDATE
+    const { error } = await supabase
+        .from('crm_leads')
+        .update({ 
+            status: validCallBackStatus, 
+            callback_time: finalDate 
+        })
+        .eq('id', lead.id);
+
+    if (error) {
+        console.error("Save failed:", error);
+        window.dispatchEvent(new CustomEvent('crm-toast', { 
+            detail: { message: `Error saving: ${error.message}`, type: 'error' } 
+        }));
+        return;
+    }
+    
+    // 5. Update Parent UI & Trigger Toast
+    onUpdate(lead.id, validCallBackStatus); 
+    
+    window.dispatchEvent(new CustomEvent('crm-toast', { 
+        detail: { message: `Call Back scheduled!`, type: 'success' } 
+    }));
+
+    setShowModal(false);
+  };
+
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null); 
   
@@ -107,7 +201,19 @@ export default function StatusCell({ lead, options, onUpdate, role }: StatusCell
   // ----------------------------------------
 
   return (
-    <>
+    <div className="flex flex-col gap-1">
+      {/* TIMER DISPLAY */}
+      {/* @ts-ignore */}
+      {(lead.status === 'call_back' || lead.status === 'Call Back') && (
+        <div 
+            onClick={() => setShowModal(true)}
+            className={`flex items-center gap-1.5 text-[10px] uppercase tracking-wider cursor-pointer hover:underline px-1 ${timeStatus.color}`}
+        >
+            {timeStatus.isOverdue ? <AlertTriangle size={10} /> : <Clock size={10} />}
+            <span>{timeStatus.text}</span>
+        </div>
+      )}
+
       <button 
         ref={buttonRef}
         onClick={toggleDropdown}
@@ -138,16 +244,29 @@ export default function StatusCell({ lead, options, onUpdate, role }: StatusCell
             {visibleOptions.map((opt) => (
               <button
                 key={opt.label}
-                onClick={() => {
-                  onUpdate(lead.id, opt.label);
+                onClick={async () => {
                   setIsOpen(false);
+
+                  // 1. INTERCEPT "CALL BACK" (Open Modal)
+                  if (opt.label.toLowerCase().replace(/_/g, ' ') === 'call back') {
+                      setShowModal(true);
+                      return;
+                  }
+
+                  // 2. FOR ANY OTHER STATUS -> CLEAR THE TIME (Fixes "Memory" Bug)
+                  // We silently wipe the callback_time so it starts fresh next time
+                  await supabase
+                    .from('crm_leads')
+                    .update({ callback_time: null })
+                    .eq('id', lead.id);
+
+                  // 3. Standard Update
+                  onUpdate(lead.id, opt.label);
                   
-                  // --- TRIGGER NOTIFICATION (Toast) ---
                   window.dispatchEvent(new CustomEvent('crm-toast', { 
                     detail: { message: `Status updated to ${opt.label}`, type: 'success' } 
                   }));
 
-                  // --- SEND ADMIN ALERT (Bell) ---
                   checkAndSendAlert(opt.label);
                 }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors text-left"
@@ -164,6 +283,14 @@ export default function StatusCell({ lead, options, onUpdate, role }: StatusCell
         </div>,
         document.body 
       )}
-    </>
+
+      <CallBackModal 
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onConfirm={handleCallbackConfirm}
+        // @ts-ignore
+        currentDate={lead.callback_time}
+      />
+    </div>
   );
 }

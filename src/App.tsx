@@ -13,6 +13,7 @@ import LeadProfilePage from './components/LeadProfile';
 import ChatBubble from './components/Chat/ChatBubble';
 import GlobalAlertDisplay from './components/Broadcast/GlobalAlertDisplay';
 import BroadcastCenter from './components/Broadcast/BroadcastCenter';
+import CallbackChecker from './components/LeadsTable/CallbackChecker';
 
 // PAGES
 import Dashboard from './pages/Dashboard';
@@ -119,6 +120,9 @@ export default function App() {
       <div className="flex min-h-screen font-sans text-[#e2e8f0]">
         <NotificationSystem />
         <GlobalAlertDisplay />
+
+        {/* --- GLOBAL WATCHERS --- */}
+        <CallbackChecker userId={session?.user?.id} />
 
         {/* --- CHAT BUBBLE WIDGET --- */}
         {session?.user?.id && showBubble && (
