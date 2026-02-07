@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Phone, Mail, Globe, ShieldCheck, ShieldAlert, Crown, Loader2, Info, X } from 'lucide-react';
+import { ArrowLeft, User, Phone, Mail, Globe, ShieldCheck, ShieldAlert, Crown, Loader2, Info, X, MonitorPlay } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 
@@ -124,6 +124,31 @@ export default function ProfileHeader({ lead, onBack }: ProfileHeaderProps) {
                 </button>
               </div>
             )}
+          </div>
+
+            {/* GHOST MODE BUTTON */}
+          <div className="flex flex-col gap-1.5 border-l border-white/10 pl-8 min-w-35 justify-center">
+             <button
+                onClick={() => {
+                    // ⚠️ CHANGE THIS URL TO YOUR REAL TRADING WEBSITE URL ⚠️
+                    const TRADING_APP_URL = "http://localhost:5174"; 
+                    
+                    if (lead.trading_account_id) {
+                        window.open(`${TRADING_APP_URL}/?monitor_user_id=${lead.trading_account_id}`, '_blank');
+                    } else {
+                        alert("No Trading Account found for this lead.");
+                    }
+                }}
+                className="group flex items-center gap-3 px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 hover:border-blue-500/40 rounded-xl transition-all cursor-pointer"
+             >
+                <div className="p-1.5 bg-blue-500/20 rounded-lg text-blue-400 group-hover:scale-110 transition-transform">
+                   <MonitorPlay size={16} />
+                </div>
+                <div className="flex flex-col items-start">
+                   <span className="text-[8px] uppercase font-black text-blue-400 tracking-widest leading-none mb-0.5">Ghost Mode</span>
+                   <span className="text-[10px] font-bold text-white group-hover:text-blue-300">Enter Room</span>
+                </div>
+             </button>
           </div>
         </div>
       </div>
