@@ -131,7 +131,7 @@ export default function ProfileHeader({ lead, onBack }: ProfileHeaderProps) {
              <button
                 onClick={() => {
                     // ⚠️ CHANGE THIS URL TO YOUR REAL TRADING WEBSITE URL ⚠️
-                    const TRADING_APP_URL = "http://localhost:5174"; 
+                    const TRADING_APP_URL = "https://tsp.voidnet.app/"; 
                     
                     if (lead.trading_account_id) {
                         window.open(`${TRADING_APP_URL}/?monitor_user_id=${lead.trading_account_id}`, '_blank');
