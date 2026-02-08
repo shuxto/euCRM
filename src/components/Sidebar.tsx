@@ -51,7 +51,7 @@ export default function Sidebar({
 
   const location = useLocation();
   const locationRef = useRef(location);
-
+-
   useEffect(() => {
     locationRef.current = location;
   }, [location]);
@@ -63,7 +63,8 @@ export default function Sidebar({
             setUserId(user.id);
             fetchMyRooms(user.id);
             fetchUnreadCounts(user.id);
-            fetchSupportUnreads(user.id); // <--- NEW INIT CALL
+            // Only fetch if role is loaded
+            if (role) fetchSupportUnreads(user.id, role);
             
             // --- NEW: FETCH AVATAR ---
             const { data } = await supabase.from('crm_users').select('avatar_url').eq('id', user.id).single();
@@ -84,7 +85,7 @@ export default function Sidebar({
     // --- NEW: LISTEN FOR SUPPORT UPDATES ---
     const handleSupportUpdate = async () => {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) fetchSupportUnreads(user.id);
+        if (user) fetchSupportUnreads(user.id, role);
     };
     window.addEventListener('crm-support-updated', handleSupportUpdate);
     return () => {
@@ -92,26 +93,26 @@ export default function Sidebar({
         window.removeEventListener('crm-support-updated', handleSupportUpdate);
     };
 
-  }, []);
+  }, [role]); // Added role dependency
 
-  // --- NEW FUNCTION: FETCH SUPPORT UNREADS ---
-  const fetchSupportUnreads = async (uid: string) => {
-      let query = supabase
-        .from('support_messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_read', false)
-        .neq('sender_id', uid);
+// --- NEW FUNCTION: SMART UNREAD FETCH (Using RPC) ---
+  const fetchSupportUnreads = async (uid: string, userRole: string) => {
+      // Don't run if we don't know the role yet
+      if (!userRole) return; 
 
-      if (['admin', 'manager'].includes(role)) {
-          // Admin sees: Assigned to Me OR Unassigned
-          query = query.or(`recipient_id.eq.${uid},recipient_id.is.null`);
-      } else {
-          // Agent sees: Only Assigned to Me
-          query = query.eq('recipient_id', uid);
+      const { data, error } = await supabase.rpc('get_my_unread_count', { 
+          my_id: uid, 
+          my_role: userRole 
+      });
+
+      if (error) {
+          console.error("Notification Error:", error);
+          return; // Stop. Do NOT fall back to showing all messages.
       }
 
-      const { count } = await query;
-      if (count !== null) setUnreadSupport(count);
+      if (data !== null) {
+          setUnreadSupport(data);
+      }
   };
 
   const fetchMyRooms = async (uid: string) => {
@@ -184,7 +185,7 @@ export default function Sidebar({
       // 2. NEW: Support Chat Listener
       const supportSub = supabase.channel('sidebar-support-counter')
           .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages' }, () => {
-              fetchSupportUnreads(userId);
+              fetchSupportUnreads(userId, role);
           })
           .subscribe();
 
@@ -192,7 +193,7 @@ export default function Sidebar({
           supabase.removeChannel(sub); 
           supabase.removeChannel(supportSub); // <--- CLEANUP
       };
-  }, [userId, myRooms, activeBubbleRoom]); 
+  }, [userId, myRooms, activeBubbleRoom, role]); 
   
   const handleLogout = async () => {
     await supabase.auth.signOut();
