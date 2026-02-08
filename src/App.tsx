@@ -24,6 +24,7 @@ import CallsPage from './components/Calls';
 import SplitterPage from './components/Splitter';
 import ChatPage from './pages/ChatPage';
 import AiAssistant from './components/Chat/AiAssistant';
+import SupportPage from './pages/SupportPage';
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -170,6 +171,8 @@ export default function App() {
             <Route path="/chat" element={<ChatPage />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
+            {/* --- SUPPORT CENTER --- */}
+            <Route path="/support" element={<SupportPage currentUser={{ ...session.user, role: currentRole }} />} />
           </Routes>
         </main>
             </>

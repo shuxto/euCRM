@@ -5,7 +5,8 @@ import {
   Shuffle, Split, FolderOpen,
   Menu, ChevronLeft, ChevronRight,
   MessageCircle,
-  Bot 
+  Bot,
+  Headphones 
 } from 'lucide-react';
 import { Radio } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -14,7 +15,7 @@ import Game2048 from './Game/Game2048';
 import { NavLink, useLocation } from 'react-router-dom';
 import NotificationBell from './NotificationBell'; 
 import { GLOBAL_CHAT_ID } from '../constants';
-import ProfileSettingsModal from './ProfileSettingsModal'; // <--- NEW IMPORT
+import ProfileSettingsModal from './ProfileSettingsModal';
 
 interface SidebarProps {
   role: string;
@@ -22,7 +23,7 @@ interface SidebarProps {
   isCollapsed: boolean; 
   onToggle: () => void; 
   onOpenBubble: () => void; 
-  onOpenAi: () => void; // <--- MAKE SURE THIS IS HERE
+  onOpenAi: () => void;
   activeBubbleRoom: string | null; 
 }
 
@@ -32,7 +33,7 @@ export default function Sidebar({
   isCollapsed, 
   onToggle, 
   onOpenBubble, 
-  onOpenAi, // <--- MAKE SURE THIS IS HERE
+  onOpenAi,
   activeBubbleRoom 
 }: SidebarProps) {
   const [userId, setUserId] = useState<string | null>(null);
@@ -40,6 +41,7 @@ export default function Sidebar({
   
   const [unreadGlobal, setUnreadGlobal] = useState(0);
   const [unreadDM, setUnreadDM] = useState(0);
+  const [unreadSupport, setUnreadSupport] = useState(0); // <--- NEW STATE
   const [myRooms, setMyRooms] = useState<Set<string>>(new Set());
 
   // --- NEW STATE FOR PROFILE ---
@@ -61,6 +63,7 @@ export default function Sidebar({
             setUserId(user.id);
             fetchMyRooms(user.id);
             fetchUnreadCounts(user.id);
+            fetchSupportUnreads(user.id); // <--- NEW INIT CALL
             
             // --- NEW: FETCH AVATAR ---
             const { data } = await supabase.from('crm_users').select('avatar_url').eq('id', user.id).single();
@@ -78,9 +81,38 @@ export default function Sidebar({
         }
     };
     window.addEventListener('crm-profile-update', handleProfileUpdate);
-    return () => window.removeEventListener('crm-profile-update', handleProfileUpdate);
+    // --- NEW: LISTEN FOR SUPPORT UPDATES ---
+    const handleSupportUpdate = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) fetchSupportUnreads(user.id);
+    };
+    window.addEventListener('crm-support-updated', handleSupportUpdate);
+    return () => {
+        window.removeEventListener('crm-profile-update', handleProfileUpdate);
+        window.removeEventListener('crm-support-updated', handleSupportUpdate);
+    };
 
   }, []);
+
+  // --- NEW FUNCTION: FETCH SUPPORT UNREADS ---
+  const fetchSupportUnreads = async (uid: string) => {
+      let query = supabase
+        .from('support_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_read', false)
+        .neq('sender_id', uid);
+
+      if (['admin', 'manager'].includes(role)) {
+          // Admin sees: Assigned to Me OR Unassigned
+          query = query.or(`recipient_id.eq.${uid},recipient_id.is.null`);
+      } else {
+          // Agent sees: Only Assigned to Me
+          query = query.eq('recipient_id', uid);
+      }
+
+      const { count } = await query;
+      if (count !== null) setUnreadSupport(count);
+  };
 
   const fetchMyRooms = async (uid: string) => {
       const { data } = await supabase.from('crm_chat_participants').select('room_id').eq('user_id', uid);
@@ -109,6 +141,7 @@ export default function Sidebar({
   useEffect(() => {
       if (!userId) return;
 
+      // 1. Existing Chat Listener
       const sub = supabase.channel('sidebar-notifications')
           .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_messages' }, (payload) => {
               const newMsg = payload.new;
@@ -148,7 +181,17 @@ export default function Sidebar({
           })
           .subscribe();
 
-      return () => { supabase.removeChannel(sub); };
+      // 2. NEW: Support Chat Listener
+      const supportSub = supabase.channel('sidebar-support-counter')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages' }, () => {
+              fetchSupportUnreads(userId);
+          })
+          .subscribe();
+
+      return () => { 
+          supabase.removeChannel(sub); 
+          supabase.removeChannel(supportSub); // <--- CLEANUP
+      };
   }, [userId, myRooms, activeBubbleRoom]); 
   
   const handleLogout = async () => {
@@ -170,6 +213,14 @@ export default function Sidebar({
         icon: MessageCircle, 
         roles: ['admin', 'manager', 'retention', 'conversion'],
         hasBadge: unreadGlobal > 0
+    },
+    // --- UPDATED SUPPORT ITEM WITH LOGIC ---
+    { 
+        path: '/support', 
+        label: 'Support', 
+        icon: Headphones, 
+        roles: ['admin', 'manager', 'retention', 'conversion', 'team_leader'],
+        hasBadge: unreadSupport > 0 && location.pathname !== '/support'
     },
     { path: '/team', label: 'Team', icon: Users, roles: ['admin', 'manager'] },
     { path: '/shuffle', label: 'Shuffle', icon: Shuffle, roles: ['admin', 'manager', 'team_leader'] },

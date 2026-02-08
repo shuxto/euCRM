@@ -23,10 +23,7 @@ export function useSupportChat(leadId: string | null) {
       setLoading(true);
       const { data, error } = await supabase
         .from('support_messages')
-        .select(`
-            *,
-            sender:sender_id ( email ) 
-        `) 
+        .select('*') // 👈 Fixed: Stop trying to join hidden tables 
         // Note: We select email/name depending on what table sender is in. 
         // Since sender could be Client OR Staff, we might need a joined view later.
         // For now, we just get the raw ID and Text.

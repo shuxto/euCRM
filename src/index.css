@@ -111,3 +111,21 @@
   white-space: nowrap;
   will-change: transform;
 }
+/* --- CUSTOM SCROLLBAR (Modern Dark Style) --- */
+::-webkit-scrollbar {
+  width: 6px;  /* Width of vertical scrollbar */
+  height: 6px; /* Height of horizontal scrollbar */
+}
+
+::-webkit-scrollbar-track {
+  background: transparent; /* Track is invisible */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151; /* Dark Grey Thumb */
+  border-radius: 10px; /* Round edges */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563; /* Lighter on hover */
+}
