@@ -348,7 +348,8 @@ export default function SupportPage({ currentUser }: { currentUser: any }) {
 
                         return (
                             <div key={msg.id} className={`flex flex-col ${isSupport ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-                                <div className={`max-w-[70%] px-4 py-3 rounded-2xl text-sm shadow-md ${
+                                {/* FIXED CSS: Added 'overflow-hidden' */}
+                                <div className={`max-w-[70%] px-4 py-3 rounded-2xl text-sm shadow-md overflow-hidden ${
                                     isSupport 
                                         ? 'bg-blue-600 text-white rounded-br-none' // Right Side (Blue)
                                         : 'bg-[#1f2937] text-gray-200 rounded-bl-none border border-white/5' // Left Side
@@ -368,7 +369,8 @@ export default function SupportPage({ currentUser }: { currentUser: any }) {
                                             />
                                         </div>
                                     ) : (
-                                        <p className="wrap-break-word whitespace-pre-wrap">{msg.message_text}</p>
+                                        // FIXED CSS: Added 'break-words' and removed 'wrap-break-word' (typo)
+                                        <p className="whitespace-pre-wrap break-all">{msg.message_text}</p>
                                     )}
                                 </div>
                                 <span className="text-[10px] text-gray-600 mt-1 px-1 opacity-60">
