@@ -133,7 +133,14 @@ export default function Game2048({ onClose, currentUserRole, currentUserId }: Ga
         .slice(0, 10);
       setLeaderboard(cleanBoard);
       
-      const myScores = await supabase.from('crm_game_scores').select('score').eq('user_id', currentUserId).order('score', { ascending: false }).limit(1).single();
+      // 🟢 FIX: Changed .single() to .maybeSingle() to prevent 406 Error
+      const myScores = await supabase.from('crm_game_scores')
+        .select('score')
+        .eq('user_id', currentUserId)
+        .order('score', { ascending: false })
+        .limit(1)
+        .maybeSingle(); // <--- FIXED HERE
+
       if (myScores.data) setMyBest(myScores.data.score);
     }
     setLoading(false);
@@ -324,7 +331,11 @@ export default function Game2048({ onClose, currentUserRole, currentUserId }: Ga
 
     setMyBest(finalScore); 
     fireConfetti(); 
-    await supabase.from('crm_game_scores').insert({ user_id: currentUserId, score: finalScore });
+    // This tells Supabase: "If this user exists, UPDATE their score. If not, INSERT new."
+await supabase.from('crm_game_scores').upsert(
+  { user_id: currentUserId, score: finalScore }, 
+  { onConflict: 'user_id' }
+);
     setTimeout(fetchSystemInfo, 1000); 
   };
 
