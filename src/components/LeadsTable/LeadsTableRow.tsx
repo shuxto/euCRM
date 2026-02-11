@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Phone, Mail, Eye, MessageSquare, ShieldCheck, ShieldAlert, Shield, Loader2 } from 'lucide-react';
 import { type Lead } from '../../hooks/useLeads';
 import StatusCell from './StatusCell';
@@ -26,7 +26,8 @@ interface LeadsTableRowProps {
   totalRows: number;
 }
 
-export default function LeadsTableRow({
+// REMOVED 'export default' to avoid duplicate export error
+function LeadsTableRow({
   lead, isSelected, isVanishing, role,
   showCheckbox, showAssign,
   statusOptions, agents,
@@ -171,3 +172,7 @@ export default function LeadsTableRow({
     </tr>
   );
 }
+
+// ✅ OPTIMIZATION: Only re-render if connection/data changes
+// We use a custom comparison or just default. Default shallow compare is good if we pass stable props.
+export default React.memo(LeadsTableRow);

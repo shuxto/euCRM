@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useApp } from '../context/NotificationContext'; // 👈 Import Context for Global Cache
 
 export interface Lead {
   id: string; 
@@ -14,6 +15,7 @@ export interface Lead {
   source_file: string;
   assigned_to: string | null; 
   note_count: number;
+  callback_time?: string | null; // Added for StatusCell
 }
 
 export interface Agent {
@@ -23,28 +25,23 @@ export interface Agent {
 }
 
 export function useLeads(filters: any, currentUserId?: string) {
+  const { agents: globalAgents, statuses: globalStatuses } = useApp(); // 👈 Consume Cache
+
   const [leads, setLeads] = useState<Lead[]>([]);
   const [totalCount, setTotalCount] = useState(0); 
-  const [statusOptions, setStatusOptions] = useState<any[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- FETCH DATA (OPTIMIZED: PARALLEL REQUESTS) ---
+  // --- FETCH DATA (OPTIMIZED: ONLY LEADS) ---
   const fetchData = async () => {
+    // If global data isn't ready, we might want to wait or just proceed with empty agents/statuses.
+    // But since useLeads is usually called after AppInit, it should be fine.
+    
     setLoading(true);
 
     try {
-        // 1. BUILD QUERIES (Synchronous - No await yet)
-        
-        // Status Query
-        const statusQuery = supabase.from('crm_statuses').select('label, hex_color').eq('is_active', true).order('order_index', { ascending: true });
-        
-        // Agents Query
-        const agentsQuery = supabase.from('crm_users').select('id, real_name, role').in('role', ['conversion', 'retention', 'team_leader']).order('real_name', { ascending: true });
-
-        // Leads Query
+        // 1. BUILD QUERY (Optimized Select)
         let leadQuery = supabase.from('crm_leads')
-            .select('*', { count: 'exact' }) 
+            .select('id, name, surname, country, status, kyc_status, phone, email, created_at, source_file, assigned_to, note_count, callback_time', { count: 'exact' }) 
             .order('created_at', { ascending: false })
             .order('id', { ascending: false });
 
@@ -93,21 +90,10 @@ export function useLeads(filters: any, currentUserId?: string) {
         
         leadQuery = leadQuery.range(from, to);
 
-        // 2. EXECUTE ALL REQUESTS IN PARALLEL
-        const [
-            { data: stData }, 
-            { data: agentData }, 
-            { data: leadsData, count, error: leadError }
-        ] = await Promise.all([
-            statusQuery,
-            agentsQuery,
-            leadQuery
-        ]);
+        // 2. EXECUTE REQUEST (Single Request!)
+        const { data: leadsData, count, error: leadError } = await leadQuery;
 
         // 3. SET STATE
-        if (stData) setStatusOptions(stData);
-        if (agentData) setAgents(agentData);
-        
         if (leadError) {
             console.error("Error fetching leads:", leadError);
             setLeads([]); 
@@ -127,6 +113,7 @@ export function useLeads(filters: any, currentUserId?: string) {
   useEffect(() => {
     fetchData();
     
+    // Realtime subscription (unchanged logic)
     const leadSub = supabase.channel('table-leads')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_leads' }, (payload) => {
           setLeads(currentLeads => [payload.new as Lead, ...currentLeads]);
@@ -136,7 +123,6 @@ export function useLeads(filters: any, currentUserId?: string) {
       
     return () => { supabase.removeChannel(leadSub); };
     
-    // Using stringify to prevent infinite loops (Preserved from original)
   }, [JSON.stringify(filters), currentUserId]); 
 
   // --- ACTIONS (Untouched) ---
@@ -238,7 +224,11 @@ export function useLeads(filters: any, currentUserId?: string) {
   };
 
   return { 
-    leads, totalCount, statusOptions, agents, loading, 
+    leads, 
+    totalCount, 
+    statusOptions: globalStatuses, 
+    agents: globalAgents, 
+    loading, // 👈 RESTORED: Don't wait for global data. Show leads ASAP.
     updateLeadStatus, updateLeadAgent, deleteLead,
     bulkUpdateStatus, bulkUpdateAgent, bulkDeleteLeads,
     updateLocalLead, removeLeadFromView 

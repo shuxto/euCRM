@@ -1,4 +1,5 @@
-import { io } from 'socket.io-client';
+// import { io } from 'socket.io-client'; // REMOVED
+import { useSocket } from '../../context/SocketContext'; // 👈 NEW
 import { useState, useEffect } from 'react';
 import { LayoutDashboard, FileText, PenTool, History, Trash2, Server, ArrowRightLeft, TrendingUp, Edit2, AlertTriangle, X, Briefcase } from 'lucide-react'; 
 import { supabase } from '../../lib/supabase'; 
@@ -12,7 +13,7 @@ import LeadFinancials from './LeadFinancials';
 import TradingAccountsTab from './TradingAccountsTab'; 
 
 // ⚠️ API KEY from twelwedata.ts
-const MARKET_SOCKET_URL = "wss://trading-copy-production.up.railway.app";
+// const MARKET_SOCKET_URL = "wss://trading-copy-production.up.railway.app"; // MOVED TO CONTEXT
 
 interface LeadProfilePageProps {
   lead: any;
@@ -50,7 +51,7 @@ export default function LeadProfilePage({ lead: initialLead, onBack }: LeadProfi
 
   // --- STATE ---
   const [dbTrades, setDbTrades] = useState<any[]>([]); // Static DB Data
-  const [livePrices, setLivePrices] = useState<Record<string, number>>({}); // Live Websocket Data
+  // const [livePrices, setLivePrices] = useState<Record<string, number>>({}); // REMOVED: Managed by Context
   const [financials, setFinancials] = useState({
     mainBalance: 0,
     roomBalance: 0,
@@ -116,50 +117,36 @@ export default function LeadProfilePage({ lead: initialLead, onBack }: LeadProfi
     setLoadingData(false);
   };
 
-  // --- 2. SOCKET.IO CONNECTION (FIXED) ---
+  // --- 2. SOCKET.IO CONNECTION (VIA CONTEXT) ---
+  const { marketPrices, socket } = useSocket();
+
   useEffect(() => {
     // Safety Checks
-    if (dbTrades.length === 0 || activeTab !== 'overview') return;
+    if (dbTrades.length === 0 || activeTab !== 'overview' || !socket) return;
 
     // 1. Prepare symbols string
     const symbols = Array.from(new Set(dbTrades.map(t => t.symbol))).join(',');
 
-    // 2. Connect to Railway
-    // ✅ Added reconnectionAttempts to stabilize connection
-    const socket = io(MARKET_SOCKET_URL, {
-        transports: ['websocket', 'polling'],
-        reconnectionAttempts: 5, 
-    });
-
-    socket.on('connect', () => {
+    // 2. Subscribe to these symbols using the SHARED socket
+    if (socket.connected) {
         socket.emit('subscribe', { action: "subscribe", params: { symbols } });
-    });
+    }
 
-    socket.on('price_update', (data: any) => {
-        if (data && data.symbol && data.price) {
-            setLivePrices(prev => ({
-                ...prev,
-                [data.symbol]: parseFloat(data.price)
-            }));
-        }
-    });
+    // We don't need to listen for 'price_update' here because the Context handles it
+    // and puts it into 'marketPrices' which we consume below.
 
-    return () => {
-        // ✅ FIX: Only disconnect if fully connected to prevent console errors
-        if (socket.connected) {
-            socket.disconnect();
-        } else {
-            socket.off(); // Remove listeners
-            socket.close(); // Force close
-        }
-    };
-    // ✅ FIX: Dependency changed from [dbTrades] to [dbTrades.length]
-    // This stops the infinite re-render loop that causes the WebSocket error.
-  }, [dbTrades.length, activeTab]);
+  }, [dbTrades.length, activeTab, socket]); 
+  
+  // Note: We use 'marketPrices' from context directly in the render logic below.
+  // We sync it to local state just to keep the diff minimal if needed, 
+  // OR we just replace 'livePrices' usage with 'marketPrices'.
+  // Let's replace usage for cleaner code.
+
 
   // --- 3. CALCULATE LIVE PnL ---
   const activeTradesWithLiveStats = dbTrades.map(trade => {
-      const currentPrice = livePrices[trade.symbol] || trade.entry_price; 
+      // Use GLOBAL marketPrices instead of local livePrices
+      const currentPrice = marketPrices[trade.symbol] || trade.entry_price; 
       let pnl = 0;
       
       if (trade.type === 'buy') {

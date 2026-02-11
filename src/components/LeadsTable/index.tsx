@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useLeads, type Lead } from '../../hooks/useLeads'; 
@@ -67,7 +67,7 @@ export default function LeadsTable({ role = 'admin', filters, onLeadClick, onPag
 
   // --- LOGIC HANDLERS ---
 
-  const handleStatusUpdateInterceptor = (id: string, newStatus: string) => {
+  const onStatusChange = (id: string, newStatus: string) => {
     const lead = leads.find(l => l.id === id);
     const name = lead ? `${lead.name} ${lead.surname}` : 'this lead';
 
@@ -85,6 +85,11 @@ export default function LeadsTable({ role = 'admin', filters, onLeadClick, onPag
     }
     updateLeadStatus(id, newStatus);
   };
+
+  // ✅ STABLE HANDLERS (Memoized)
+  const handleSetKycLead = useCallback((lead: Lead) => setKycLead(lead), []);
+  const handleSetActiveNoteLead = useCallback((lead: Lead) => setActiveNoteLead(lead), []);
+  const handleDeleteClick = useCallback((lead: Lead) => setLeadToDelete(lead), []);
 
   const executePendingAction = async () => {
     if (!pendingAction) return;
@@ -228,7 +233,7 @@ export default function LeadsTable({ role = 'admin', filters, onLeadClick, onPag
                 lead={lead}
                 isSelected={selectedIds.includes(lead.id)}
                 isVanishing={vanishingIds.includes(lead.id)}
-                role={role} // <--- PASSING ROLE HERE
+                role={role} 
                 showCheckbox={showCheckbox}
                 showAssign={showAssign}
                 showDelete={showDelete}
@@ -236,10 +241,10 @@ export default function LeadsTable({ role = 'admin', filters, onLeadClick, onPag
                 agents={agents}
                 toggleSelectOne={toggleSelectOne}
                 onLeadClick={onLeadClick}
-                setKycLead={setKycLead}
-                setActiveNoteLead={setActiveNoteLead}
-                handleDeleteClick={() => setLeadToDelete(lead)}
-                onStatusUpdateInterceptor={handleStatusUpdateInterceptor}
+                setKycLead={handleSetKycLead}          // Stable
+                setActiveNoteLead={handleSetActiveNoteLead} // Stable
+                handleDeleteClick={handleDeleteClick}  // Stable
+                onStatusUpdateInterceptor={onStatusChange}
                 updateLeadAgent={updateLeadAgent}
                 rowIndex={index}
                 totalRows={leads.length}

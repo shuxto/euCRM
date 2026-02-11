@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react'; // Added React
 import { supabase } from '../lib/supabase';
 import { 
   UserPlus, PhoneOff, Mic, PhoneForwarded, XCircle, 
@@ -12,6 +12,8 @@ interface StatsGridProps {
   currentUserId?: string;
   role?: string;
 }
+
+// ... helper functions ...
 
 const getIconForLabel = (label: string) => {
   const l = label.toLowerCase();
@@ -39,7 +41,7 @@ const hexToRgba = (hex: string, alpha: number) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-export default function StatsGrid({ selectedStatuses, onToggleStatus, currentUserId, role }: StatsGridProps) {
+function StatsGrid({ selectedStatuses, onToggleStatus, currentUserId, role }: StatsGridProps) {
   const [stats, setStats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -191,3 +193,6 @@ export default function StatsGrid({ selectedStatuses, onToggleStatus, currentUse
     </div>
   );
 }
+
+// ✅ OPTIMIZATION: Memoize the grid
+export default React.memo(StatsGrid);

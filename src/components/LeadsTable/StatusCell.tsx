@@ -7,7 +7,7 @@ import CallBackModal from './CallBackModal';
 
 interface StatusCellProps {
   // FIX: We add callback_time manually here so TypeScript stops complaining
-  lead: Lead & { callback_time?: string | null }; 
+  lead: Lead; 
   options: any[];
   onUpdate: (id: string, newStatus: string) => void;
   role?: string;

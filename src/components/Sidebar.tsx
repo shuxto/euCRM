@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, Users, Phone, 
   LogOut, Shield, Briefcase, 
@@ -14,8 +14,8 @@ import { Gamepad2 } from 'lucide-react';
 import Game2048 from './Game/Game2048';
 import { NavLink, useLocation } from 'react-router-dom';
 import NotificationBell from './NotificationBell'; 
-import { GLOBAL_CHAT_ID } from '../constants';
 import ProfileSettingsModal from './ProfileSettingsModal';
+import { useApp } from '../context/NotificationContext'; // 👈 NEW
 
 interface SidebarProps {
   role: string;
@@ -34,44 +34,31 @@ export default function Sidebar({
   onOpenAi,
   onLogout
 }: SidebarProps) {
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null); // RESTORED
   const [isMobileOpen, setIsMobileOpen] = useState(false); 
   
-  const [unreadGlobal, setUnreadGlobal] = useState(0);
-  const [unreadDM, setUnreadDM] = useState(0);
-  const [unreadSupport, setUnreadSupport] = useState(0); // <--- NEW STATE
-  const [myRooms, setMyRooms] = useState<Set<string>>(new Set());
+  const { unreadGlobal, unreadDM, unreadSupport, clearGlobal, clearDM } = useApp();
 
-  // --- NEW STATE FOR PROFILE ---
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showGame, setShowGame] = useState(false);
 
   const location = useLocation();
-  const locationRef = useRef(location);
--
-  useEffect(() => {
-    locationRef.current = location;
-  }, [location]);
 
+  // RESTORED: Profile & User ID Logic (Lightweight)
   useEffect(() => {
     const init = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
             setUserId(user.id);
-            fetchMyRooms(user.id);
-            fetchUnreadCounts(user.id);
-            // Only fetch if role is loaded
-            if (role) fetchSupportUnreads(user.id, role);
-            
-            // --- NEW: FETCH AVATAR ---
+            // Fetch Avatar
             const { data } = await supabase.from('crm_users').select('avatar_url').eq('id', user.id).single();
             if (data) setAvatarUrl(data.avatar_url);
         }
     };
     init();
 
-    // --- NEW: LISTEN FOR UPDATES ---
+    // Listen for Profile Updates (Avatar changes)
     const handleProfileUpdate = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -80,126 +67,9 @@ export default function Sidebar({
         }
     };
     window.addEventListener('crm-profile-update', handleProfileUpdate);
-    // --- NEW: LISTEN FOR SUPPORT UPDATES ---
-    const handleSupportUpdate = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) fetchSupportUnreads(user.id, role);
-    };
-    window.addEventListener('crm-support-updated', handleSupportUpdate);
-    return () => {
-        window.removeEventListener('crm-profile-update', handleProfileUpdate);
-        window.removeEventListener('crm-support-updated', handleSupportUpdate);
-    };
-
-  }, [role]); // Added role dependency
-
-// --- NEW FUNCTION: SMART UNREAD FETCH (Using RPC) ---
-  const fetchSupportUnreads = async (uid: string, userRole: string) => {
-      // Don't run if we don't know the role yet
-      if (!userRole) return; 
-
-      const { data, error } = await supabase.rpc('get_my_unread_count', { 
-          my_id: uid, 
-          my_role: userRole 
-      });
-
-      if (error) {
-          console.error("Notification Error:", error);
-          return; // Stop. Do NOT fall back to showing all messages.
-      }
-
-      if (data !== null) {
-          setUnreadSupport(data);
-      }
-  };
-
-  const fetchMyRooms = async (uid: string) => {
-      const { data } = await supabase.from('crm_chat_participants').select('room_id').eq('user_id', uid);
-      if (data) {
-          const roomIds = new Set(data.map(r => r.room_id));
-          setMyRooms(roomIds);
-      }
-  };
-
-  const fetchUnreadCounts = async (uid: string) => {
-      // Robust Fetch: Get all unread messages and filter in JS
-      const { data } = await supabase
-        .from('crm_messages')
-        .select('sender_id, room_id') 
-        .eq('read', false);
-      
-      if (data) {
-          const validUnreads = data.filter(msg => 
-              msg.sender_id !== uid && 
-              msg.room_id !== GLOBAL_CHAT_ID
-          );
-          setUnreadDM(validUnreads.length);
-      }
-  };
-
-  useEffect(() => {
-      if (!userId) return;
-
-      // 1. Existing Chat Listener
-      const sub = supabase.channel('sidebar-notifications')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_messages' }, (payload) => {
-              const newMsg = payload.new;
-              if (newMsg.sender_id === userId) return;
-
-
-              const currentPath = window.location.pathname; 
-              const currentParams = new URLSearchParams(window.location.search);
-              const currentPageRoom = currentParams.get('room_id');
-
-              if (currentPath === '/chat') {
-                  if (currentPageRoom === newMsg.room_id) return;
-                  if ((!currentPageRoom || currentPageRoom === GLOBAL_CHAT_ID) && newMsg.room_id === GLOBAL_CHAT_ID) return;
-              }
-
-              if (newMsg.room_id === GLOBAL_CHAT_ID) {
-                  setUnreadGlobal(prev => prev + 1);
-                  return;
-              }
-
-              if (myRooms.has(newMsg.room_id)) {
-                  setUnreadDM(prev => prev + 1);
-              } else if (newMsg.room_id !== GLOBAL_CHAT_ID) {
-                  setUnreadDM(prev => prev + 1);
-                  setMyRooms(prev => new Set(prev).add(newMsg.room_id)); 
-              }
-          })
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'crm_messages' }, (payload) => {
-             if (payload.new.sender_id !== userId) {
-                 if (payload.old.read === false && payload.new.read === true) {
-                     if (payload.new.room_id !== GLOBAL_CHAT_ID) {
-                        setUnreadDM(prev => Math.max(0, prev - 1));
-                     }
-                 }
-             }
-          })
-          .subscribe();
-
-      // 2. NEW: Support Chat Listener
-      const supportSub = supabase.channel('sidebar-support-counter')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages' }, () => {
-              fetchSupportUnreads(userId, role);
-          })
-          .subscribe();
-
-      return () => { 
-          supabase.removeChannel(sub); 
-          supabase.removeChannel(supportSub); // <--- CLEANUP
-      };
-  }, [userId, myRooms, role]); 
+    return () => { window.removeEventListener('crm-profile-update', handleProfileUpdate); };
+  }, []);
   
-
-  const clearGlobal = () => setUnreadGlobal(0);
-  const clearDM = () => {
-      setUnreadDM(0);
-      // We now navigate to /chat page instead of opening a bubble
-      window.location.href = '/chat'; 
-  };
-
   const menuItems = [
     { path: '/', label: 'Leads', icon: LayoutDashboard, roles: ['admin', 'manager', 'retention', 'conversion', 'team_leader'] },
     { 
@@ -209,7 +79,6 @@ export default function Sidebar({
         roles: ['admin', 'manager', 'retention', 'conversion'],
         hasBadge: unreadGlobal > 0
     },
-    // --- UPDATED SUPPORT ITEM WITH LOGIC ---
     { 
         path: '/support', 
         label: 'Support', 
