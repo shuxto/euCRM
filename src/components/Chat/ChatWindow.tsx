@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useChatContext } from '../../context/ChatContext';
-import { Loader2, ArrowUp, FileText, Download, ExternalLink } from 'lucide-react';
+import { Loader2, ArrowUp, FileText, Download } from 'lucide-react';
 
 export default function ChatWindow() {
   const { messages, isLoading, currentUser, activeRoom, rooms, loadMoreMessages, hasMore } = useChatContext();
@@ -131,7 +131,7 @@ export default function ChatWindow() {
                                         );
                                     } else {
                                         return (
-                                            <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-2 bg-black/20 rounded-lg border border-white/10 hover:bg-black/40 transition-colors min-w-[160px]">
+                                            <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-2 bg-black/20 rounded-lg border border-white/10 hover:bg-black/40 transition-colors min-w-40">
                                                 <div className="w-8 h-8 rounded bg-blue-500/20 flex items-center justify-center shrink-0">
                                                     <FileText size={16} className="text-blue-400" />
                                                 </div>

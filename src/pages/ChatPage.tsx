@@ -1,4 +1,3 @@
-import React from 'react';
 import ChatSidebar from '../components/Chat/ChatSidebar';
 import ChatWindow from '../components/Chat/ChatWindow';
 import MessageInput from '../components/Chat/MessageInput';
