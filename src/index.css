@@ -15,46 +15,68 @@
 @layer base {
   body {
     background-color: var(--color-crm-bg);
-    background-image: 
-      radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
-      radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
-      radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+    background-image:
+      radial-gradient(at 0% 0%, hsla(253, 16%, 7%, 1) 0, transparent 50%),
+      radial-gradient(at 50% 0%, hsla(225, 39%, 30%, 1) 0, transparent 50%),
+      radial-gradient(at 100% 0%, hsla(339, 49%, 30%, 1) 0, transparent 50%);
     background-attachment: fixed;
     color: #e2e8f0;
-    font-family: 'Inter', sans-serif;
+    font-family: "Inter", sans-serif;
   }
 }
 
 /* 3. UTILITIES */
+/* 3. UTILITIES */
+:root {
+  --glass-bg: var(--color-crm-panel);
+  --glass-blur: blur(10px);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.performance-mode {
+  /* DISABLE FANCY BACKGROUND */
+  background-image: none !important;
+  background-color: #0f172a !important; /* Solid Dark Blue */
+
+  /* DISABLE BLUR VARIABLES */
+  --glass-bg: #1e293b; /* Solid Slate-800 */
+  --glass-blur: none;
+  --glass-border: 1px solid #334155;
+}
+
 .glass-panel {
-  background: var(--color-crm-panel);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
 }
 
 /* 4. ANIMATIONS */
 @keyframes shrink {
-  from { width: 100%; }
-  to { width: 0%; }
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
 }
 
 /* --- SEXY SCROLLBARS --- */
 
 /* 1. Target the class */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;               /* Thin width */
-  height: 6px;              /* Thin height (for horizontal) */
+  width: 6px; /* Thin width */
+  height: 6px; /* Thin height (for horizontal) */
 }
 
 /* 2. The Track (Background) */
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;  /* Invisible background */
+  background: transparent; /* Invisible background */
 }
 
 /* 3. The Handle (The moving part) */
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: #334155; /* Slate-700 (Dark Gray) */
-  border-radius: 10px;       /* Round edges */
+  border-radius: 10px; /* Round edges */
   border: 1px solid #1e293b; /* Little border for depth */
 }
 
@@ -65,10 +87,29 @@
 
 /* --- CYBERPUNK VANISH EFFECT --- */
 @keyframes glitch-vanish {
-  0% { opacity: 1; transform: scale(1) skew(0deg); filter: blur(0px); }
-  20% { opacity: 0.8; transform: scale(1.02) skew(10deg); filter: hue-rotate(90deg); }
-  40% { opacity: 0.6; transform: scale(0.95) skew(-20deg); filter: blur(2px); }
-  100% { opacity: 0; transform: scale(0) skew(45deg); filter: blur(20px); height: 0; margin: 0; padding: 0; }
+  0% {
+    opacity: 1;
+    transform: scale(1) skew(0deg);
+    filter: blur(0px);
+  }
+  20% {
+    opacity: 0.8;
+    transform: scale(1.02) skew(10deg);
+    filter: hue-rotate(90deg);
+  }
+  40% {
+    opacity: 0.6;
+    transform: scale(0.95) skew(-20deg);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0) skew(45deg);
+    filter: blur(20px);
+    height: 0;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 .animate-vanish {
@@ -78,10 +119,26 @@
 
 /* --- "GOOD LUCK" TEXT ANIMATION --- */
 @keyframes text-slam {
-  0% { transform: scale(5); opacity: 0; letter-spacing: 50px; }
-  50% { transform: scale(1); opacity: 1; letter-spacing: 5px; }
-  80% { transform: scale(1.1); letter-spacing: 5px; text-shadow: 0 0 50px rgba(139, 92, 246, 0.8); }
-  100% { transform: scale(1); opacity: 0; letter-spacing: 10px; }
+  0% {
+    transform: scale(5);
+    opacity: 0;
+    letter-spacing: 50px;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+    letter-spacing: 5px;
+  }
+  80% {
+    transform: scale(1.1);
+    letter-spacing: 5px;
+    text-shadow: 0 0 50px rgba(139, 92, 246, 0.8);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+    letter-spacing: 10px;
+  }
 }
 
 .animate-good-luck {
@@ -97,13 +154,19 @@
   animation: fall linear forwards;
 }
 @keyframes fall {
-  to { transform: translateY(100vh) rotate(720deg); }
+  to {
+    transform: translateY(100vh) rotate(720deg);
+  }
 }
 
 /* --- BROADCAST TICKER ANIMATION (FIXED) --- */
 @keyframes marquee {
-  0% { transform: translateX(100vw); }
-  100% { transform: translateX(-100%); }
+  0% {
+    transform: translateX(100vw);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 .animate-marquee {
@@ -113,7 +176,7 @@
 }
 /* --- CUSTOM SCROLLBAR (Modern Dark Style) --- */
 ::-webkit-scrollbar {
-  width: 6px;  /* Width of vertical scrollbar */
+  width: 6px; /* Width of vertical scrollbar */
   height: 6px; /* Height of horizontal scrollbar */
 }
 

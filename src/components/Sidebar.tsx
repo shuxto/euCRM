@@ -15,7 +15,9 @@ import Game2048 from './Game/Game2048';
 import { NavLink, useLocation } from 'react-router-dom';
 import NotificationBell from './NotificationBell'; 
 import ProfileSettingsModal from './ProfileSettingsModal';
-import { useApp } from '../context/NotificationContext'; // 👈 NEW
+import { useApp } from '../context/NotificationContext'; 
+import { usePerformance } from '../context/PerformanceContext'; // 👈 NEW
+import { Zap, ZapOff } from 'lucide-react'; // Icons
 
 interface SidebarProps {
   role: string;
@@ -38,6 +40,7 @@ export default function Sidebar({
   const [isMobileOpen, setIsMobileOpen] = useState(false); 
   
   const { unreadGlobal, unreadDM, unreadSupport, clearGlobal, clearDM } = useApp();
+  const { isPerformanceMode, togglePerformanceMode } = usePerformance(); // 👈 NEW
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -267,10 +270,23 @@ export default function Sidebar({
                     </div>
                   </div>
                   
+                  {/* POTATO MODE TOGGLE */}
                   <button 
-  onClick={onLogout}
-  className="w-full flex items-center justify-center gap-2 p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium border border-transparent hover:border-red-500/20 cursor-pointer"
->
+                    onClick={togglePerformanceMode}
+                    className={`w-full flex items-center justify-center gap-2 p-2 mb-2 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
+                        isPerformanceMode 
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20' 
+                        : 'bg-white/5 text-gray-400 border-transparent hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    {isPerformanceMode ? <ZapOff size={16} /> : <Zap size={16} />}
+                    <span>{isPerformanceMode ? 'Potato Mode: ON' : 'High Performance'}</span>
+                  </button>
+                  
+                  <button 
+                    onClick={onLogout}
+                    className="w-full flex items-center justify-center gap-2 p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium border border-transparent hover:border-red-500/20 cursor-pointer"
+                  >
                     <LogOut size={16} />
                     <span>Sign Out</span>
                   </button>
