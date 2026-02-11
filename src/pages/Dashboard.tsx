@@ -39,7 +39,7 @@ export default function Dashboard({ session, onLeadClick }: DashboardProps) {
   };
 
   return (
-    <div className="animate-in fade-in duration-500">
+    <div className="w-full pb-20 animate-in fade-in zoom-in-95 duration-500">
       <header className="flex justify-between items-end mb-8">
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight">Lead Center</h2>
@@ -67,10 +67,11 @@ export default function Dashboard({ session, onLeadClick }: DashboardProps) {
       />
       
       <LeadsTable 
-          role={currentRole} 
+          role={currentRole as any} 
           filters={activeFilters} 
           onLeadClick={onLeadClick} 
           currentUserEmail={session.user.email} 
+          currentUserId={currentUserId} // 👈 PASSED DOWN
           onPageChange={(newPage: number) => setActiveFilters(prev => ({ ...prev, page: newPage }))}
       />
     </div>

@@ -207,36 +207,30 @@ export default function Sidebar({
 
           <div className={`mt-auto pt-6 border-t border-white/5 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
 
-             {/* AI ASSISTANT BUTTON */}
-             <button 
-                onClick={() => {
-                    console.log("AI Button Clicked"); // <--- Debug check
-                    onOpenAi();
-                }}
-                className={`mb-3 w-full bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 hover:text-white rounded-lg transition flex items-center justify-center relative ${isCollapsed ? 'p-2' : 'py-2 gap-2'}`}
-                title="AI Assistant"
-             >
-                <div className="relative">
+             {/* AI & GAME (Row) */}
+             <div className="flex gap-2 mb-2">
+                 <button 
+                    onClick={() => onOpenAi()}
+                    className="flex-1 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 hover:text-white rounded-lg transition flex items-center justify-center py-2 relative"
+                    title="AI Assistant"
+                 >
                     <Bot size={18} />
-                </div>
-                {!isCollapsed && <span className="text-sm font-bold">AI Assistant</span>}
-             </button>
+                    {!isCollapsed && <span className="text-[10px] font-bold ml-1">AI</span>}
+                 </button>
 
-          {/* GAME BUTTON */}
-             <button 
-                onClick={() => setShowGame(true)}
-                className={`mb-3 w-full bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 text-purple-300 hover:text-white rounded-lg transition flex items-center justify-center relative ${isCollapsed ? 'p-2' : 'py-2 gap-2'}`}
-                title="Play 2048"
-             >
-                <div className="relative">
-                    <Gamepad2 size={18} className="animate-pulse" />
-                </div>
-                {!isCollapsed && <span className="text-sm font-bold">Championship</span>}
-             </button>
+                 <button 
+                    onClick={() => setShowGame(true)}
+                    className="flex-1 bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 text-purple-300 hover:text-white rounded-lg transition flex items-center justify-center py-2 relative"
+                    title="Play 2048"
+                 >
+                    <Gamepad2 size={18} />
+                    {!isCollapsed && <span className="text-[10px] font-bold ml-1">Game</span>}
+                 </button>
+             </div>
               
              <button 
                 onClick={clearDM} 
-                className={`mb-3 w-full bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition flex items-center justify-center relative ${isCollapsed ? 'p-2' : 'py-2 gap-2'}`}
+                className={`mb-2 w-full bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition flex items-center justify-center relative ${isCollapsed ? 'p-2' : 'py-2 gap-2'}`}
                 title="Open Quick Chat"
              >
                 <div className="relative">
@@ -251,11 +245,11 @@ export default function Sidebar({
              </button>
 
              {!isCollapsed ? (
-                <div className="bg-black/20 p-4 rounded-xl animate-in fade-in duration-300">
+                <div className="bg-black/20 p-3 rounded-xl animate-in fade-in duration-300 border border-white/5">
                   {/* --- CLICKABLE PROFILE HEADER --- */}
                   <div 
                     onClick={() => setShowProfileModal(true)} 
-                    className="flex items-center gap-3 mb-4 cursor-pointer hover:bg-white/5 p-2 -mx-2 rounded-lg transition group"
+                    className="flex items-center gap-3 mb-3 cursor-pointer hover:bg-white/5 p-1.5 -mx-1.5 rounded-lg transition group"
                   >
                     <div className="w-8 h-8 rounded-full bg-linear-to-br from-gray-700 to-gray-900 border border-white/10 flex items-center justify-center shrink-0 overflow-hidden relative">
                       {avatarUrl ? (
@@ -265,29 +259,29 @@ export default function Sidebar({
                       )}
                     </div>
                     <div className="flex-1 overflow-hidden">
-                      <p className="text-sm font-bold text-white truncate group-hover:text-blue-400 transition">{username}</p>
-                      <p className="text-xs text-gray-500 capitalize truncate">{role}</p>
+                      <p className="text-xs font-bold text-white truncate group-hover:text-blue-400 transition">{username}</p>
+                      <p className="text-[10px] text-gray-500 capitalize truncate">{role}</p>
                     </div>
                   </div>
                   
                   {/* POTATO MODE TOGGLE */}
                   <button 
                     onClick={togglePerformanceMode}
-                    className={`w-full flex items-center justify-center gap-2 p-2 mb-2 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
+                    className={`w-full flex items-center justify-center gap-2 p-1.5 mb-2 rounded-lg text-[10px] uppercase font-bold border transition-all cursor-pointer ${
                         isPerformanceMode 
                         ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20' 
                         : 'bg-white/5 text-gray-400 border-transparent hover:bg-white/10 hover:text-white'
                     }`}
                   >
-                    {isPerformanceMode ? <ZapOff size={16} /> : <Zap size={16} />}
-                    <span>{isPerformanceMode ? 'Potato Mode: ON' : 'High Performance'}</span>
+                    {isPerformanceMode ? <ZapOff size={14} /> : <Zap size={14} />}
+                    <span>{isPerformanceMode ? 'Potato: ON' : 'High Perf'}</span>
                   </button>
                   
                   <button 
                     onClick={onLogout}
-                    className="w-full flex items-center justify-center gap-2 p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium border border-transparent hover:border-red-500/20 cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all text-[11px] font-bold border border-transparent hover:border-red-500/20 cursor-pointer"
                   >
-                    <LogOut size={16} />
+                    <LogOut size={14} />
                     <span>Sign Out</span>
                   </button>
                 </div>

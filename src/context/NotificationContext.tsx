@@ -61,7 +61,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 { data: statusData }
             ] = await Promise.all([
                  supabase.from('crm_chat_participants').select('room_id').eq('user_id', user.id),
-                 supabase.from('crm_users').select('id, real_name, role').in('role', ['conversion', 'retention', 'team_leader']).order('real_name', { ascending: true }),
+                 supabase.from('crm_users').select('id, real_name, role').neq('role', 'admin').order('real_name', { ascending: true }),
                  supabase.from('crm_statuses').select('label, hex_color').eq('is_active', true).order('order_index', { ascending: true })
             ]);
 

@@ -14,14 +14,23 @@ export default function ChatSidebar() {
 
   useEffect(() => {
     if (!currentUser) return;
-    supabase.from('crm_users')
-        .select('id, real_name, avatar_url, role')
-        .neq('id', currentUser.id)
-        .order('real_name')
-        .then(({ data, error }) => {
-            if (error) console.error("Error fetching users:", error);
-            if (data) setAllUsers(data);
-        });
+
+    const fetchUsers = () => {
+        supabase.from('crm_users')
+            .select('id, real_name, avatar_url, role, last_seen')
+            .neq('id', currentUser.id)
+            .order('real_name')
+            .then(({ data, error }) => {
+                if (error) console.error("Error fetching users:", error);
+                if (data) setAllUsers(data);
+            });
+    };
+
+    fetchUsers(); // Initial fetch
+
+    const interval = setInterval(fetchUsers, 60000); // Activity Refresh (1 min)
+    
+    return () => clearInterval(interval);
   }, [currentUser]);
 
   const isVisibleRoom = (r: any) => {
@@ -134,6 +143,7 @@ export default function ChatSidebar() {
             </div>
             
             <div className="space-y-1">
+
                 {displayedUsers.length === 0 ? (
                     <div className="px-3 py-2 text-[10px] text-gray-600 italic">
                         {allUsers.length === 0 ? "No users visible (Check RLS)" : "No matches found"}
@@ -148,6 +158,9 @@ export default function ChatSidebar() {
                         const isActive = activeRoom === activeDmRoom?.id;
                         const unread = activeDmRoom?.unread_count || 0;
 
+                        // ONLINE CHECK (5 minute buffer)
+                        const isOnline = user.last_seen && (new Date().getTime() - new Date(user.last_seen).getTime() < 5 * 60 * 1000);
+
                         return (
                             <div 
                                 key={user.id} 
@@ -157,7 +170,7 @@ export default function ChatSidebar() {
                                 }`}
                             >
                                 <div className="relative">
-                                    <div className="w-6 h-6 rounded-full bg-gray-700 overflow-hidden border border-white/10">
+                                    <div className={`w-6 h-6 rounded-full bg-gray-700 overflow-hidden border ${isOnline ? 'border-emerald-500/50' : 'border-white/10'} flex items-center justify-center`}>
                                         {user.avatar_url ? (
                                             <img src={user.avatar_url} className="w-full h-full object-cover" />
                                         ) : (
@@ -166,12 +179,21 @@ export default function ChatSidebar() {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="absolute bottom-0 right-0 w-1.5 h-1.5 bg-emerald-500 rounded-full border border-black"></div>
+                                    {/* ONLINE DOT */}
+                                    {isOnline && (
+                                        <div className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 rounded-full border border-black shadow-[0_0_5px_rgba(16,185,129,0.8)]"></div>
+                                    )}
                                 </div>
 
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-xs truncate font-medium">{user.real_name || 'Unknown'}</p>
-                                    <p className="text-[9px] text-gray-600 truncate">{user.role || 'Member'}</p>
+                                    <div className="flex justify-between items-center">
+                                       <p className="text-xs truncate font-medium">{user.real_name || 'Unknown'}</p>
+                                    </div>
+                                    
+                                    <div className="flex justify-between items-center">
+                                        <p className="text-[9px] text-gray-600 truncate">{user.role || 'Member'}</p>
+                                        {isOnline && <span className="text-[8px] text-emerald-500/70">Online</span>}
+                                    </div>
                                 </div>
 
                                 {unread > 0 && (

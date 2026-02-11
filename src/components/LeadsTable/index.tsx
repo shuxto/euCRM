@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useLeads, type Lead } from '../../hooks/useLeads'; 
@@ -14,26 +14,21 @@ interface LeadsTableProps {
   filters?: any;
   onLeadClick: (lead: Lead) => void;
   currentUserEmail?: string;
+  currentUserId?: string; 
   onPageChange?: (page: number) => void;
 }
 
 type ActionType = 'transfer' | 'ftd' | 'upsale';
 
-export default function LeadsTable({ role = 'admin', filters, onLeadClick, onPageChange }: LeadsTableProps) {
+export default function LeadsTable({ role = 'admin', filters, onLeadClick, currentUserId, onPageChange }: LeadsTableProps) {
   
-  const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-        if(data.user) setCurrentUserId(data.user.id);
-    });
-  }, []);
+  // REMOVED INTERNAL FETCH (Race condition fix)
 
   const { 
     leads, totalCount, statusOptions, agents, loading, 
     updateLeadStatus, updateLeadAgent, deleteLead,
     bulkUpdateStatus, bulkUpdateAgent, bulkDeleteLeads,
-    updateLocalLead, removeLeadFromView // <--- IMPORTED HERE
+    updateLocalLead, removeLeadFromView 
   } = useLeads(filters, currentUserId);
   
   const [selectedIds, setSelectedIds] = useState<string[]>([]);

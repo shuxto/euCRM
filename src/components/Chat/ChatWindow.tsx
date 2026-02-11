@@ -1,21 +1,67 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, useLayoutEffect } from 'react';
 import { useChatContext } from '../../context/ChatContext';
 import { Loader2, ArrowUp, FileText, Download } from 'lucide-react';
 
 export default function ChatWindow() {
   const { messages, isLoading, currentUser, activeRoom, rooms, loadMoreMessages, hasMore } = useChatContext();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null); // New Ref for container
   const [loadingMore, setLoadingMore] = useState(false);
+  
+  // Track previous state to determine scroll behavior
+  const prevMessagesLength = useRef(0);
+  const prevRoomId = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (!loadingMore && bottomRef.current) {
-        bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+  useLayoutEffect(() => {
+    // Case 1: Room Switched -> Instant jump to bottom
+    if (activeRoom !== prevRoomId.current) {
+        if (bottomRef.current) {
+            bottomRef.current.scrollIntoView({ behavior: 'auto' });
+        }
+        prevRoomId.current = activeRoom;
+        prevMessagesLength.current = messages.length;
+        return;
     }
-  }, [messages.length, activeRoom]);
+
+    // Case 2: Messages Added
+    if (messages.length > prevMessagesLength.current) {
+        const isLoadOlder = loadingMore; 
+
+        if (isLoadOlder) {
+            // Maintain position (TODO: Precise calc if needed, for now do nothing or adjust scrollTop)
+            // Ideally we'd measure scrollHeight diff, but for now just don't scroll to bottom.
+        } else {
+             // New Message -> Smooth scroll
+             if (bottomRef.current) {
+                bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    }
+
+    prevMessagesLength.current = messages.length;
+  }, [messages, activeRoom, loadingMore]);
 
   const handleLoadMore = async () => {
       setLoadingMore(true);
+      
+      // Capture current scroll height before loading
+      const container = containerRef.current;
+      const oldScrollHeight = container ? container.scrollHeight : 0;
+      const oldScrollTop = container ? container.scrollTop : 0;
+
       await loadMoreMessages();
+      
+      // Restore position logic would go here if we used useLayoutEffect depending on re-render timing
+      // For simplified "don't jump to bottom", the effect above handles the "don't scroll" part.
+      // To keep visual position, we might need to adjust scrollTop after render.
+      requestAnimationFrame(() => {
+          if (container) {
+              const newScrollHeight = container.scrollHeight;
+              const heightDiff = newScrollHeight - oldScrollHeight;
+              container.scrollTop = oldScrollTop + heightDiff;
+          }
+      });
+
       setLoadingMore(false);
   };
 
@@ -51,7 +97,7 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
+      <div ref={containerRef} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
         
         {hasMore && (
             <div className="flex justify-center py-2">

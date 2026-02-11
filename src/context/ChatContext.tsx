@@ -48,12 +48,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
     if (!data) return;
 
+    if (!data) return;
+
     let visibleRooms = data.filter((r: any) => {
+       // 1. DMs: STRICT - Only if I am a participant
+       if (r.type === 'dm') {
+          return r.participants?.some((p: any) => p.user.id === user.id);
+       }
+       
+       // 2. Global/Department/Group: Check Roles
        if (!r.allowed_roles || r.allowed_roles.length === 0) return true; 
        if (r.allowed_roles.includes(user.user_metadata?.role || user.role)) return true;
-       if (['admin', 'manager'].includes(user.user_metadata?.role || user.role)) return true;
-       const amIParticipant = r.participants?.some((p: any) => p.user.id === user.id);
-       if (amIParticipant) return true;
+       
+       // 3. Fallback: If I am a participant (e.g. manually added to a group)
+       if (r.participants?.some((p: any) => p.user.id === user.id)) return true;
+
        return false;
     });
 
@@ -205,7 +214,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
      const existingLocal = rooms.find(r => 
         r.type === 'dm' && 
-        r.participants?.some((p:any) => p.user.id === targetUserId)
+        r.participants?.some((p:any) => p.user.id === targetUserId) &&
+        r.participants?.some((p:any) => p.user.id === currentUser.id)
      );
      if (existingLocal) {
          setActiveRoom(existingLocal.id);
