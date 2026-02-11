@@ -120,8 +120,8 @@ export default function Sidebar({
           fixed inset-y-0 left-0 z-50 h-screen bg-crm-bg border-r border-white/5 flex flex-col transition-all duration-300
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} 
           md:translate-x-0 
-          ${isCollapsed ? 'md:w-20' : 'md:w-64'} 
-          w-64
+          ${isCollapsed ? 'md:w-20' : 'md:w-56'} 
+          w-56
         `}
       >
         <button

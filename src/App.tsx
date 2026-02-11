@@ -147,7 +147,7 @@ export default function App() {
     }}
 />
         
-        <main className={`flex-1 p-6 relative z-10 overflow-y-auto h-screen transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
+        <main className={`flex-1 p-6 relative z-10 overflow-y-auto h-screen transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-56'}`}>
           <Routes>
             <Route path="/" element={<Dashboard session={session} onLeadClick={setSelectedLead} />} />
             <Route path="/team" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><TeamManagement /></ProtectedRoute>} />
