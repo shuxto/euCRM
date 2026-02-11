@@ -1,126 +1,167 @@
-import { useRef, useEffect } from 'react';
-// FIX: Added 'type' keyword
-import type { ChatMessage } from '../../types/chat';
-import { Loader2, FileText, Download } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useChatContext } from '../../context/ChatContext';
+import { Loader2, ArrowUp, FileText, Download, ExternalLink } from 'lucide-react';
 
-interface ChatWindowProps {
-  messages: ChatMessage[];
-  currentUserId: string;
-  isLoading: boolean;
-}
-
-export default function ChatWindow({ messages, currentUserId, isLoading }: ChatWindowProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
+export default function ChatWindow() {
+  const { messages, isLoading, currentUser, activeRoom, rooms, loadMoreMessages, hasMore } = useChatContext();
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (!loadingMore && bottomRef.current) {
+        bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages.length, activeRoom]);
 
-  const renderAttachments = (attachments: string[]) => {
-    if (!attachments || attachments.length === 0) return null;
-    
-    return (
-      <div className="flex flex-wrap gap-2 mt-2">
-        {attachments.map((url, i) => {
-          const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|bmp)$/i);
-          
-          if (isImage) {
-            return (
-              <a 
-                key={i} 
-                href={url} 
-                target="_blank" 
-                rel="noreferrer" 
-                className="block w-48 h-32 rounded-lg overflow-hidden border border-white/10 hover:opacity-80 transition shadow-sm"
-              >
-                <img src={url} alt="attachment" className="w-full h-full object-cover" />
-              </a>
-            );
-          }
-          
-          return (
-            <a 
-              key={i} 
-              href={url} 
-              target="_blank" 
-              rel="noreferrer" 
-              className="flex items-center gap-2 bg-black/20 p-2.5 rounded-lg border border-white/10 hover:bg-white/5 transition group"
-            >
-               <div className="p-1.5 bg-blue-500/10 rounded text-blue-400">
-                  <FileText size={16} />
-               </div>
-               <div className="flex flex-col">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase">File Attachment</span>
-                  {/* FIX: Changed max-w-[100px] to max-w-25 */}
-                  <span className="text-xs text-gray-200 truncate max-w-25">Download</span>
-               </div>
-               <Download size={14} className="text-gray-500 group-hover:text-white ml-2 transition" />
-            </a>
-          );
-        })}
-      </div>
-    );
+  const handleLoadMore = async () => {
+      setLoadingMore(true);
+      await loadMoreMessages();
+      setLoadingMore(false);
   };
 
-  if (isLoading && messages.length === 0) {
-      return (
-        <div className="flex-1 flex flex-col items-center justify-center space-y-3">
-            <Loader2 className="animate-spin text-indigo-500" size={32} />
-            <p className="text-xs text-gray-500 animate-pulse">Loading encrypted history...</p>
-        </div>
-      );
+  const formatTime = (dateString: string) => {
+      return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const isImage = (url: string) => /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url);
+  
+  const getFileName = (url: string) => {
+      try { return decodeURIComponent(url.split('/').pop()?.split('?')[0] || 'File'); } 
+      catch { return 'File'; }
+  };
+
+  if (!activeRoom) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-black/40 text-gray-500">
+        <p>Select a room to start chatting</p>
+      </div>
+    );
   }
 
+  const currentRoom = rooms.find(r => r.id === activeRoom);
+
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-      
-      {messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-gray-500 opacity-50">
-             <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                 <FileText size={24} />
-             </div>
-             <p className="text-sm italic">No messages yet. Break the ice!</p>
-          </div>
-      )}
+    <div className="flex-1 flex flex-col min-h-0 bg-black/20">
+      <div className="h-14 border-b border-white/5 flex items-center px-6 justify-between bg-black/40">
+        <div>
+            <h2 className="text-white font-bold">{currentRoom?.name || 'Chat'}</h2>
+            <p className="text-[10px] text-gray-400">
+                {currentRoom?.type === 'dm' ? 'Direct Message' : 'Secure Channel'}
+            </p>
+        </div>
+      </div>
 
-      {messages.map((msg, index) => {
-        const isMe = msg.sender_id === currentUserId;
-        const showAvatar = index === 0 || messages[index - 1].sender_id !== msg.sender_id;
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
         
-        return (
-          <div key={msg.id} className={`flex gap-3 ${isMe ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-            
-            <div className={`w-8 h-8 shrink-0 flex items-center justify-center rounded-lg overflow-hidden border border-white/5 ${!showAvatar ? 'opacity-0' : ''} ${isMe ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.3)]' : 'bg-gray-700'}`}>
-               {msg.sender?.avatar_url ? (
-                   <img src={msg.sender.avatar_url} className="w-full h-full object-cover" />
-               ) : (
-                   <span className="text-xs font-bold text-white">{msg.sender?.real_name?.[0]?.toUpperCase() || '?'}</span>
-               )}
+        {hasMore && (
+            <div className="flex justify-center py-2">
+                <button 
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs text-blue-400 transition-colors"
+                >
+                    {loadingMore ? <Loader2 className="animate-spin" size={12} /> : <ArrowUp size={12} />}
+                    Load Older Messages
+                </button>
             </div>
+        )}
 
-            <div className={`flex flex-col max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
-               {showAvatar && !isMe && <span className="text-[10px] text-gray-400 ml-1 mb-1 font-medium">{msg.sender?.real_name}</span>}
-               
-               <div className={`
-                 px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-md
-                 ${isMe 
-                    ? 'bg-indigo-600 text-white rounded-tr-none border border-indigo-500' 
-                    : 'bg-[#1e293b] text-gray-200 rounded-tl-none border border-white/10'
-                 }
-               `}>
-                 {msg.content}
-                 {renderAttachments(msg.attachments || [])}
-               </div>
-               
-               <span className="text-[9px] text-gray-600 mt-1 px-1 opacity-60">
-                 {new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-               </span>
-            </div>
+        {isLoading && messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="animate-spin text-blue-500" size={32} />
           </div>
-        );
-      })}
-      <div ref={endRef} />
+        ) : (
+          messages.map((msg, index) => {
+            // LOGIC CHECK: Are we the sender?
+            const isMe = currentUser && msg.sender_id === currentUser.id;
+            
+            // LOGIC CHECK: Should we show avatar? (First message of a sequence)
+            const showAvatar = !isMe && (index === 0 || messages[index - 1].sender_id !== msg.sender_id);
+            
+            // LOGIC CHECK: Show name only if showing avatar
+            const showName = !isMe && showAvatar; 
+
+            return (
+              <div key={msg.id} className={`flex gap-3 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                
+                {/* AVATAR COLUMN */}
+                {!isMe && (
+                  <div className="w-8 shrink-0 flex flex-col items-center">
+                    {showAvatar ? (
+                      <div className="w-8 h-8 rounded-full bg-gray-700 border border-white/10 overflow-hidden flex items-center justify-center">
+                         {msg.sender?.avatar_url ? (
+                            <img src={msg.sender.avatar_url} className="w-full h-full object-cover" />
+                         ) : (
+                            // FALLBACK: If no avatar, show First Initial or '?'
+                            <span className="text-[10px] font-bold text-white">
+                                {(msg.sender?.real_name || '?')[0]}
+                            </span>
+                         )}
+                      </div>
+                    ) : <div className="w-8" />} 
+                  </div>
+                )}
+
+                {/* MESSAGE COLUMN */}
+                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%]`}>
+                    
+                    {/* SENDER NAME */}
+                    {showName && (
+                        <span className="text-[10px] text-gray-400 mb-1 ml-1">
+                            {msg.sender?.real_name || 'Unknown User'}
+                        </span>
+                    )}
+
+                    {/* BUBBLE */}
+                    <div className={`p-3 rounded-2xl text-sm ${
+                        isMe 
+                        ? 'bg-blue-600 text-white rounded-tr-sm' 
+                        : 'bg-white/10 text-gray-200 rounded-tl-sm'
+                    }`}>
+                        
+                        {/* ATTACHMENTS (Small Images) */}
+                        {msg.attachments && msg.attachments.length > 0 && (
+                            <div className="mb-2 flex flex-wrap gap-2">
+                                {msg.attachments.map((url, i) => {
+                                    if (isImage(url)) {
+                                        return (
+                                            <a key={i} href={url} target="_blank" rel="noreferrer" className="block relative group overflow-hidden rounded-lg border border-black/20">
+                                                <img src={url} className="w-32 h-32 object-cover transition-transform duration-300 group-hover:scale-110" />
+                                            </a>
+                                        );
+                                    } else {
+                                        return (
+                                            <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-2 bg-black/20 rounded-lg border border-white/10 hover:bg-black/40 transition-colors min-w-[160px]">
+                                                <div className="w-8 h-8 rounded bg-blue-500/20 flex items-center justify-center shrink-0">
+                                                    <FileText size={16} className="text-blue-400" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-medium truncate text-white">{getFileName(url)}</p>
+                                                </div>
+                                                <Download size={14} className="text-gray-500" />
+                                            </a>
+                                        );
+                                    }
+                                })}
+                            </div>
+                        )}
+                        
+                        {/* TEXT */}
+                        <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                    
+                    {/* TIME */}
+                    <span className="text-[9px] text-gray-500 mt-1 px-1">
+                        {formatTime(msg.created_at)}
+                    </span>
+                </div>
+
+              </div>
+            );
+          })
+        )}
+        <div ref={bottomRef} />
+      </div>
     </div>
   );
 }

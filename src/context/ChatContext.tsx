@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-// FIX: Added 'type' keyword for verbatimModuleSyntax compliance
 import type { ChatMessage, ChatRoom } from '../types/chat';
 
 interface ChatContextType {
@@ -9,8 +8,11 @@ interface ChatContextType {
   rooms: ChatRoom[];
   messages: ChatMessage[];
   sendMessage: (content: string, files: File[], mentions: string[]) => Promise<void>;
+  createOrOpenDM: (targetUserId: string) => Promise<string | null>;
+  loadMoreMessages: () => Promise<void>;
   isLoading: boolean;
   currentUser: any;
+  hasMore: boolean;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -21,31 +23,57 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
-  // 1. Init User & Rooms
+  const MESSAGES_PER_PAGE = 50;
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      setCurrentUser(data.user);
-      if (data.user) fetchRooms(data.user);
+      if (data.user) {
+        setCurrentUser(data.user);
+        fetchRooms(data.user);
+      }
     });
   }, []);
 
-  // 2. Fetch Rooms
   const fetchRooms = async (user: any) => {
-    const { data } = await supabase.from('crm_chat_rooms').select('*');
+    const { data } = await supabase
+      .from('crm_chat_rooms')
+      .select(`
+        *,
+        participants:crm_chat_participants(
+          user:crm_users(id, real_name, avatar_url)
+        )
+      `);
+
     if (!data) return;
 
-    const visibleRooms = data.filter((r: any) => {
-       if (!r.allowed_roles) return true;
-       if (r.allowed_roles.includes(user.role)) return true;
-       if (['admin', 'manager'].includes(user.role)) return true;
+    let visibleRooms = data.filter((r: any) => {
+       if (!r.allowed_roles || r.allowed_roles.length === 0) return true; 
+       if (r.allowed_roles.includes(user.user_metadata?.role || user.role)) return true;
+       if (['admin', 'manager'].includes(user.user_metadata?.role || user.role)) return true;
+       const amIParticipant = r.participants?.some((p: any) => p.user.id === user.id);
+       if (amIParticipant) return true;
        return false;
+    });
+
+    visibleRooms = visibleRooms.map((room: any) => {
+        if (room.type === 'dm' && room.participants) {
+            const otherUser = room.participants.find((p: any) => p.user.id !== user.id);
+            if (otherUser?.user) {
+                return {
+                    ...room,
+                    name: otherUser.user.real_name,
+                    avatar_url: otherUser.user.avatar_url
+                };
+            }
+        }
+        return room;
     });
     
     visibleRooms.sort((a: any, b: any) => {
-        if (a.type === 'department' && b.type !== 'department') return -1;
-        if (a.type !== 'department' && b.type === 'department') return 1;
-        return 0;
+        const typeOrder = { global: 0, department: 1, group: 2, dm: 3 };
+        return (typeOrder[a.type as keyof typeof typeOrder] || 99) - (typeOrder[b.type as keyof typeof typeOrder] || 99);
     });
 
     setRooms(visibleRooms);
@@ -56,27 +84,60 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // 3. Load Messages
+  useEffect(() => {
+    if (!currentUser) return;
+    const channel = supabase.channel('global-chat-listener')
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'crm_messages' }, 
+        (payload) => {
+           if (payload.new.room_id !== activeRoom) {
+               setRooms(prev => prev.map(r => {
+                   if (r.id === payload.new.room_id) {
+                       return { ...r, unread_count: (r.unread_count || 0) + 1 };
+                   }
+                   return r;
+               }));
+           }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUser, activeRoom]);
+
+  // LOAD MESSAGES (With strict Sender Fetching)
   useEffect(() => {
     if (!activeRoom) return;
 
     setIsLoading(true);
     setMessages([]); 
+    setHasMore(true);
+    setRooms(prev => prev.map(r => r.id === activeRoom ? { ...r, unread_count: 0 } : r));
 
     supabase.from('crm_messages')
-      .select('*, sender:crm_users(id, real_name, avatar_url, role)')
+      // FIX: Added explicit relationship '!sender_id' to prevent ambiguity
+      .select('*, sender:crm_users!sender_id(id, real_name, avatar_url, role)')
       .eq('room_id', activeRoom)
-      .order('created_at', { ascending: true })
-      .limit(100)
-      .then(({ data }) => {
-         if (data) setMessages(data as any);
+      .order('created_at', { ascending: false })
+      .limit(MESSAGES_PER_PAGE)
+      .then(({ data, error }) => {
+         if (error) {
+             console.error("Error loading messages:", error);
+         } else if (data) {
+             setMessages(data.reverse() as any);
+             if (data.length < MESSAGES_PER_PAGE) setHasMore(false);
+         }
          setIsLoading(false);
       });
 
     const channel = supabase.channel(`room-${activeRoom}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_messages', filter: `room_id=eq.${activeRoom}` }, 
       async (payload) => {
-         const { data: sender } = await supabase.from('crm_users').select('id, real_name, avatar_url, role').eq('id', payload.new.sender_id).single();
+         // FETCH SENDER IMMEDIATELY FOR NEW MESSAGE
+         const { data: sender } = await supabase.from('crm_users')
+             .select('id, real_name, avatar_url, role')
+             .eq('id', payload.new.sender_id)
+             .single();
+         
          const newMsg = { ...payload.new, sender } as ChatMessage;
          setMessages(prev => [...prev, newMsg]);
       })
@@ -85,7 +146,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     return () => { supabase.removeChannel(channel); };
   }, [activeRoom]);
 
-  // 4. Send Function
+  const loadMoreMessages = async () => {
+      if (!activeRoom || messages.length === 0) return;
+      
+      const oldestMessage = messages[0];
+      const { data } = await supabase
+          .from('crm_messages')
+          // FIX: Added explicit relationship '!sender_id' here too
+          .select('*, sender:crm_users!sender_id(id, real_name, avatar_url, role)')
+          .eq('room_id', activeRoom)
+          .lt('created_at', oldestMessage.created_at)
+          .order('created_at', { ascending: false })
+          .limit(MESSAGES_PER_PAGE);
+
+      if (data) {
+          if (data.length < MESSAGES_PER_PAGE) setHasMore(false);
+          setMessages(prev => [...data.reverse(), ...prev]);
+      }
+  };
+
   const sendMessage = useCallback(async (content: string, files: File[], mentions: string[]) => {
     if (!currentUser || !activeRoom) return;
 
@@ -107,18 +186,54 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
        }
     }
 
-    await supabase.from('crm_messages').insert({
+    const { error } = await supabase.from('crm_messages').insert({
        room_id: activeRoom,
        sender_id: currentUser.id,
        content,
        attachments: attachmentUrls.length > 0 ? attachmentUrls : null,
        mentions: mentions.length > 0 ? mentions : null,
-       read: false
+       read: false 
     });
+
+    if (error) {
+        console.error("FAILED TO SEND MESSAGE:", error);
+    }
   }, [currentUser, activeRoom]);
 
+  const createOrOpenDM = async (targetUserId: string) => {
+     if (!currentUser) return null;
+
+     const existingLocal = rooms.find(r => 
+        r.type === 'dm' && 
+        r.participants?.some((p:any) => p.user.id === targetUserId)
+     );
+     if (existingLocal) {
+         setActiveRoom(existingLocal.id);
+         return existingLocal.id;
+     }
+
+     const uniqueName = `dm-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+
+     const { data: newRoom, error } = await supabase
+        .from('crm_chat_rooms')
+        .insert({ type: 'dm', name: uniqueName })
+        .select()
+        .single();
+     
+     if (newRoom && !error) {
+        await supabase.from('crm_chat_participants').insert([
+            { room_id: newRoom.id, user_id: currentUser.id },
+            { room_id: newRoom.id, user_id: targetUserId }
+        ]);
+        await fetchRooms(currentUser);
+        setActiveRoom(newRoom.id);
+        return newRoom.id;
+     }
+     return null;
+  };
+
   return (
-    <ChatContext.Provider value={{ activeRoom, setActiveRoom, rooms, messages, sendMessage, isLoading, currentUser }}>
+    <ChatContext.Provider value={{ activeRoom, setActiveRoom, rooms, messages, sendMessage, createOrOpenDM, loadMoreMessages, hasMore, isLoading, currentUser }}>
       {children}
     </ChatContext.Provider>
   );

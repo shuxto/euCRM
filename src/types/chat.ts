@@ -5,13 +5,17 @@ export interface ChatUser {
   role: string;
 }
 
+export interface ChatParticipant {
+  user: ChatUser;
+}
+
 export interface ChatMessage {
   id: string;
   room_id: string;
   sender_id: string;
   content: string;
-  attachments?: string[]; // URLs for images/files
-  mentions?: string[];    // User IDs of people mentioned
+  attachments?: string[];
+  mentions?: string[];
   created_at: string;
   read: boolean;
   sender?: ChatUser;
@@ -23,4 +27,6 @@ export interface ChatRoom {
   type: 'global' | 'department' | 'group' | 'dm';
   allowed_roles?: string[];
   unread_count?: number;
+  avatar_url?: string;
+  participants?: ChatParticipant[]; // <--- This line fixes the error
 }
