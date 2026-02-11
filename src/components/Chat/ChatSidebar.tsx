@@ -64,7 +64,38 @@ export default function ChatSidebar() {
       setSearchTerm('');
   };
 
-  const displayedUsers = allUsers.filter(u => 
+  // MERGE & SORT USERS
+  const sortedUsers = allUsers.map(user => {
+      // Find the DM room for this user
+      const dmRoom = rooms.find(r => 
+          r.type === 'dm' && 
+          r.participants?.some(p => p.user.id === user.id)
+      );
+      
+      // Calculate Interaction Time
+      // Priority: 1. last_message_at (Newest) 2. created_at 3. Fallback
+      let interactionTime = 0;
+      if (dmRoom) {
+          const t1 = dmRoom.last_message_at ? new Date(dmRoom.last_message_at).getTime() : 0;
+          const t2 = dmRoom.created_at ? new Date(dmRoom.created_at).getTime() : 0;
+          interactionTime = Math.max(t1, t2);
+      }
+
+      return {
+          ...user,
+          dmRoom,
+          interactionTime
+      };
+  }).sort((a, b) => {
+      // 1. Sort by Time (Descending)
+      if (a.interactionTime !== b.interactionTime) {
+          return b.interactionTime - a.interactionTime;
+      }
+      // 2. Alphabetical Fallback
+      return (a.real_name || '').localeCompare(b.real_name || '');
+  });
+
+  const displayedUsers = sortedUsers.filter(u => 
       (u.real_name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -150,7 +181,8 @@ export default function ChatSidebar() {
                     </div>
                 ) : (
                     displayedUsers.map(user => {
-                        const activeDmRoom = rooms.find(r => 
+                        // Use pre-calculated DM room (or find if not mapped yet, though it should be)
+                        const activeDmRoom = user.dmRoom || rooms.find(r => 
                             r.type === 'dm' && 
                             r.participants?.some(p => p.user.id === user.id)
                         );
@@ -197,7 +229,7 @@ export default function ChatSidebar() {
                                 </div>
 
                                 {unread > 0 && (
-                                    <div className="bg-blue-500 text-white text-[9px] font-bold px-1.5 rounded-full">
+                                    <div className="bg-red-500 text-white text-[9px] font-bold px-1.5 rounded-full shadow-sm">
                                         {unread}
                                     </div>
                                 )}

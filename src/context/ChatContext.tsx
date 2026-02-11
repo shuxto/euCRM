@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import type { ChatMessage, ChatRoom } from '../types/chat';
+import { useApp } from './NotificationContext';
 
 interface ChatContextType {
   activeRoom: string | null;
@@ -24,6 +25,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const { decrementUnreadDM } = useApp();
 
   const MESSAGES_PER_PAGE = 50;
 
@@ -41,6 +43,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       .from('crm_chat_rooms')
       .select(`
         *,
+        last_message_at,
         participants:crm_chat_participants(
           user:crm_users(id, real_name, avatar_url)
         )
@@ -66,21 +69,46 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
        return false;
     });
 
+    // 4. FETCH UNREAD COUNTS (Fix for "Missing Red Dot inside")
+    const { data: unreads } = await supabase
+        .from('crm_messages')
+        .select('room_id')
+        .eq('read', false)
+        .neq('sender_id', user.id); // Only messages NOT from me
+
+    const unreadMap: Record<string, number> = {};
+    if (unreads) {
+        unreads.forEach((u: any) => {
+            unreadMap[u.room_id] = (unreadMap[u.room_id] || 0) + 1;
+        });
+    }
+
     visibleRooms = visibleRooms.map((room: any) => {
+        // Map Unread Count
+        const count = unreadMap[room.id] || 0;
+        
+        // Handle DM Naming
         if (room.type === 'dm' && room.participants) {
             const otherUser = room.participants.find((p: any) => p.user.id !== user.id);
             if (otherUser?.user) {
                 return {
                     ...room,
                     name: otherUser.user.real_name,
-                    avatar_url: otherUser.user.avatar_url
+                    avatar_url: otherUser.user.avatar_url,
+                    unread_count: count
                 };
             }
         }
-        return room;
+        return { ...room, unread_count: count };
     });
     
     visibleRooms.sort((a: any, b: any) => {
+        // 1. Sort by Time (Newest First)
+        const timeA = new Date(a.last_message_at || a.created_at).getTime();
+        const timeB = new Date(b.last_message_at || b.created_at).getTime();
+        if (timeA !== timeB) return timeB - timeA;
+
+        // 2. Fallback to Type Priority
         const typeOrder = { global: 0, department: 1, group: 2, dm: 3 };
         return (typeOrder[a.type as keyof typeof typeOrder] || 99) - (typeOrder[b.type as keyof typeof typeOrder] || 99);
     });
@@ -128,12 +156,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       .eq('room_id', activeRoom)
       .order('created_at', { ascending: false })
       .limit(MESSAGES_PER_PAGE)
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
          if (error) {
              console.error("Error loading messages:", error);
          } else if (data) {
              setMessages(data.reverse() as any);
              if (data.length < MESSAGES_PER_PAGE) setHasMore(false);
+             
+             // --- MARK AS READ (DB) ---
+             const unreadIds = data.filter((m: any) => !m.read && m.sender_id !== currentUser.id).map((m: any) => m.id);
+             if (unreadIds.length > 0) {
+                 await supabase.from('crm_messages').update({ read: true }).in('id', unreadIds);
+                 decrementUnreadDM(unreadIds.length);
+             }
          }
          setIsLoading(false);
       });
@@ -204,7 +239,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
        read: false 
     });
 
-    if (error) {
+    if (!error) {
+        // A. Update Room Timestamp (For Sorting)
+        await supabase.from('crm_chat_rooms')
+            .update({ last_message_at: new Date().toISOString() })
+            .eq('id', activeRoom);
+
+        // B. Handle Mentions -> Notifications
+        if (mentions.length > 0) {
+            const notifs = mentions.map(uid => ({
+                user_id: uid,
+                title: `New Mention from ${currentUser.user_metadata?.real_name || 'Agent'}`,
+                message: content.length > 50 ? content.substring(0, 50) + '...' : content,
+                related_lead_id: activeRoom, // Link to Chat Room
+                is_read: false
+            }));
+            await supabase.from('crm_notifications').insert(notifs);
+        }
+    } else {
         console.error("FAILED TO SEND MESSAGE:", error);
     }
   }, [currentUser, activeRoom]);

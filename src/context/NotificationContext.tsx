@@ -9,6 +9,7 @@ interface AppContextType {
   unreadSupport: number;
   clearGlobal: () => void;
   clearDM: () => void;
+  decrementUnreadDM: (amount?: number) => void;
   
   // Global Data Cache (For useLeads optimization)
   agents: any[];
@@ -22,6 +23,7 @@ const AppContext = createContext<AppContextType>({
   unreadSupport: 0,
   clearGlobal: () => {},
   clearDM: () => {},
+  decrementUnreadDM: () => {},
   agents: [],
   statuses: [],
   isDataLoaded: false,
@@ -123,11 +125,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const clearGlobal = () => setUnreadGlobal(0);
   const clearDM = () => setUnreadDM(0);
+  const decrementUnreadDM = (amount: number = 1) => setUnreadDM(prev => Math.max(0, prev - amount));
 
   return (
     <AppContext.Provider value={{ 
         unreadGlobal, unreadDM, unreadSupport, 
-        clearGlobal, clearDM, 
+        clearGlobal, clearDM, decrementUnreadDM, 
         agents, statuses, isDataLoaded 
     }}>
       {children}

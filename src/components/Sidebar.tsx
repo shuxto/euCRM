@@ -80,7 +80,7 @@ export default function Sidebar({
         label: 'Messenger', 
         icon: MessageCircle, 
         roles: ['admin', 'manager', 'retention', 'conversion'],
-        hasBadge: unreadGlobal > 0
+        hasBadge: (unreadGlobal > 0 || unreadDM > 0)
     },
     { 
         path: '/support', 

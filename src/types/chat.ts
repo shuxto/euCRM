@@ -28,5 +28,7 @@ export interface ChatRoom {
   allowed_roles?: string[];
   unread_count?: number;
   avatar_url?: string;
-  participants?: ChatParticipant[]; // <--- This line fixes the error
+  participants?: ChatParticipant[];
+  created_at?: string;
+  last_message_at?: string;
 }
