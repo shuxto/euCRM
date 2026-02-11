@@ -15,7 +15,8 @@ export interface Lead {
   source_file: string;
   assigned_to: string | null; 
   note_count: number;
-  callback_time?: string | null; // Added for StatusCell
+  callback_time?: string | null; 
+  trading_account_id?: string | null; // 👈 RESTORED for LeadProfile
 }
 
 export interface Agent {
@@ -25,7 +26,7 @@ export interface Agent {
 }
 
 export function useLeads(filters: any, currentUserId?: string) {
-  const { agents: globalAgents, statuses: globalStatuses } = useApp(); // 👈 Consume Cache
+  const { agents: globalAgents, statuses: globalStatuses } = useApp(); 
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [totalCount, setTotalCount] = useState(0); 
@@ -33,15 +34,13 @@ export function useLeads(filters: any, currentUserId?: string) {
 
   // --- FETCH DATA (OPTIMIZED: ONLY LEADS) ---
   const fetchData = async () => {
-    // If global data isn't ready, we might want to wait or just proceed with empty agents/statuses.
-    // But since useLeads is usually called after AppInit, it should be fine.
     
     setLoading(true);
 
     try {
         // 1. BUILD QUERY (Optimized Select)
         let leadQuery = supabase.from('crm_leads')
-            .select('id, name, surname, country, status, kyc_status, phone, email, created_at, source_file, assigned_to, note_count, callback_time', { count: 'exact' }) 
+            .select('id, name, surname, country, status, kyc_status, phone, email, created_at, source_file, assigned_to, note_count, callback_time, trading_account_id', { count: 'exact' }) 
             .order('created_at', { ascending: false })
             .order('id', { ascending: false });
 
