@@ -75,16 +75,16 @@ export default function ChatWindow() {
             // LOGIC CHECK: Are we the sender?
             const isMe = currentUser && msg.sender_id === currentUser.id;
             
-            // LOGIC CHECK: Should we show avatar? (First message of a sequence)
-            const showAvatar = !isMe && (index === 0 || messages[index - 1].sender_id !== msg.sender_id);
+            // FIXED: Removed '!isMe' so YOU can see your own avatar too
+            const showAvatar = index === 0 || messages[index - 1].sender_id !== msg.sender_id;
             
-            // LOGIC CHECK: Show name only if showing avatar
-            const showName = !isMe && showAvatar; 
+            // FIXED: Removed '!isMe' so YOU can see your own name too
+            const showName = showAvatar; 
 
             return (
               <div key={msg.id} className={`flex gap-3 ${isMe ? 'justify-end' : 'justify-start'}`}>
                 
-                {/* AVATAR COLUMN */}
+                {/* LEFT AVATAR (OTHERS) */}
                 {!isMe && (
                   <div className="w-8 shrink-0 flex flex-col items-center">
                     {showAvatar ? (
@@ -92,7 +92,6 @@ export default function ChatWindow() {
                          {msg.sender?.avatar_url ? (
                             <img src={msg.sender.avatar_url} className="w-full h-full object-cover" />
                          ) : (
-                            // FALLBACK: If no avatar, show First Initial or '?'
                             <span className="text-[10px] font-bold text-white">
                                 {(msg.sender?.real_name || '?')[0]}
                             </span>
@@ -105,9 +104,9 @@ export default function ChatWindow() {
                 {/* MESSAGE COLUMN */}
                 <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%]`}>
                     
-                    {/* SENDER NAME */}
+                    {/* SENDER NAME (Now shows for everyone) */}
                     {showName && (
-                        <span className="text-[10px] text-gray-400 mb-1 ml-1">
+                        <span className={`text-[10px] text-gray-400 mb-1 ${isMe ? 'mr-1' : 'ml-1'}`}>
                             {msg.sender?.real_name || 'Unknown User'}
                         </span>
                     )}
@@ -119,7 +118,7 @@ export default function ChatWindow() {
                         : 'bg-white/10 text-gray-200 rounded-tl-sm'
                     }`}>
                         
-                        {/* ATTACHMENTS (Small Images) */}
+                        {/* ATTACHMENTS */}
                         {msg.attachments && msg.attachments.length > 0 && (
                             <div className="mb-2 flex flex-wrap gap-2">
                                 {msg.attachments.map((url, i) => {
@@ -155,6 +154,23 @@ export default function ChatWindow() {
                         {formatTime(msg.created_at)}
                     </span>
                 </div>
+
+                {/* RIGHT AVATAR (ME) - Added this block */}
+                {isMe && (
+                  <div className="w-8 shrink-0 flex flex-col items-center">
+                    {showAvatar ? (
+                      <div className="w-8 h-8 rounded-full bg-blue-600 border border-white/10 overflow-hidden flex items-center justify-center">
+                         {msg.sender?.avatar_url ? (
+                            <img src={msg.sender.avatar_url} className="w-full h-full object-cover" />
+                         ) : (
+                            <span className="text-[10px] font-bold text-white">
+                                {(msg.sender?.real_name || '?')[0]}
+                            </span>
+                         )}
+                      </div>
+                    ) : <div className="w-8" />} 
+                  </div>
+                )}
 
               </div>
             );
