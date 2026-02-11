@@ -22,9 +22,8 @@ interface SidebarProps {
   username: string;
   isCollapsed: boolean; 
   onToggle: () => void; 
-  onOpenBubble: () => void; 
   onOpenAi: () => void;
-  activeBubbleRoom: string | null; 
+  onLogout: () => void;
 }
 
 export default function Sidebar({ 
@@ -32,9 +31,8 @@ export default function Sidebar({
   username, 
   isCollapsed, 
   onToggle, 
-  onOpenBubble, 
   onOpenAi,
-  activeBubbleRoom 
+  onLogout
 }: SidebarProps) {
   const [userId, setUserId] = useState<string | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false); 
@@ -148,7 +146,6 @@ export default function Sidebar({
               const newMsg = payload.new;
               if (newMsg.sender_id === userId) return;
 
-              if (activeBubbleRoom === newMsg.room_id) return;
 
               const currentPath = window.location.pathname; 
               const currentParams = new URLSearchParams(window.location.search);
@@ -193,17 +190,14 @@ export default function Sidebar({
           supabase.removeChannel(sub); 
           supabase.removeChannel(supportSub); // <--- CLEANUP
       };
-  }, [userId, myRooms, activeBubbleRoom, role]); 
+  }, [userId, myRooms, role]); 
   
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.reload();
-  };
 
   const clearGlobal = () => setUnreadGlobal(0);
   const clearDM = () => {
       setUnreadDM(0);
-      onOpenBubble();
+      // We now navigate to /chat page instead of opening a bubble
+      window.location.href = '/chat'; 
   };
 
   const menuItems = [
@@ -405,9 +399,9 @@ export default function Sidebar({
                   </div>
                   
                   <button 
-                    onClick={handleLogout}
-                    className="w-full flex items-center justify-center gap-2 p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium border border-transparent hover:border-red-500/20 cursor-pointer"
-                  >
+  onClick={onLogout}
+  className="w-full flex items-center justify-center gap-2 p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium border border-transparent hover:border-red-500/20 cursor-pointer"
+>
                     <LogOut size={16} />
                     <span>Sign Out</span>
                   </button>
@@ -427,10 +421,10 @@ export default function Sidebar({
                       )}
                     </div>
                     <button 
-                        onClick={handleLogout}
-                        className="p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition"
-                        title="Sign Out"
-                    >
+    onClick={onLogout}
+    className="p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition"
+    title="Sign Out"
+>
                         <LogOut size={18} />
                     </button>
                 </div>

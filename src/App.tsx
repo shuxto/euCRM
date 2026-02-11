@@ -10,7 +10,6 @@ import LoginPage from './components/LoginPage';
 import Sidebar from './components/Sidebar';
 import NotificationSystem from './components/NotificationSystem';
 import LeadProfilePage from './components/LeadProfile';
-import ChatBubble from './components/Chat/ChatBubble';
 import GlobalAlertDisplay from './components/Broadcast/GlobalAlertDisplay';
 import BroadcastCenter from './components/Broadcast/BroadcastCenter';
 import CallbackChecker from './components/LeadsTable/CallbackChecker';
@@ -38,10 +37,8 @@ export default function App() {
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
-  const [showBubble, setShowBubble] = useState(false);
   // --- NEW: This fixes the Red Dot issue ---
   // It tracks which room you are currently looking at.
-  const [activeBubbleRoom, setActiveBubbleRoom] = useState<string | null>(null); 
 // --- AI ASSISTANT STATE ---
   const [showAi, setShowAi] = useState(false);
   const [minimizeAi, setMinimizeAi] = useState(false);
@@ -122,15 +119,6 @@ export default function App() {
         {/* --- GLOBAL WATCHERS --- */}
         <CallbackChecker userId={session?.user?.id} />
 
-        {/* --- CHAT BUBBLE WIDGET --- */}
-        {session?.user?.id && showBubble && (
-            <ChatBubble 
-                currentUserId={session.user.id} 
-                onClose={() => { setShowBubble(false); setActiveBubbleRoom(null); }} 
-                onRoomChange={setActiveBubbleRoom} 
-            />
-        )}
-
 {/* --- AI ASSISTANT WIDGET --- */}
         {session?.user?.id && showAi && (
             <AiAssistant 
@@ -148,14 +136,16 @@ export default function App() {
         ) : (
             <>
         <Sidebar 
-            onOpenAi={() => { setShowAi(true); setMinimizeAi(false); }}
-            role={currentRole} 
-            username={session.user.email || 'User'} 
-            isCollapsed={isSidebarCollapsed}
-            onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            onOpenBubble={() => setShowBubble(true)}
-            activeBubbleRoom={activeBubbleRoom} // <--- Important: This tells Sidebar to hide the red dot
-        />
+    role={session?.user?.user_metadata?.role || 'agent'} 
+    username={session?.user?.user_metadata?.real_name || 'User'} 
+    isCollapsed={isSidebarCollapsed} 
+    onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+    onOpenAi={() => { setShowAi(true); setMinimizeAi(false); }} // <--- Connect AI Button
+    onLogout={async () => {
+        await supabase.auth.signOut();
+        setSession(null);
+    }}
+/>
         
         <main className={`flex-1 p-6 relative z-10 overflow-y-auto h-screen transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
           <Routes>
