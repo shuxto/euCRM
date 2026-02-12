@@ -26,9 +26,16 @@ export interface ChatRoom {
   name: string;
   type: 'global' | 'department' | 'group' | 'dm';
   allowed_roles?: string[];
-  unread_count?: number;
-  avatar_url?: string;
-  participants?: ChatParticipant[];
+  dm_target_id?: string;
+  
+  // View Properties (Calculated)
+  display_name?: string; 
+  display_avatar?: string;
+  unread_count: number; 
+  
   created_at?: string;
   last_message_at?: string;
+  
+  // Relationships
+  participants?: ChatParticipant[];
 }

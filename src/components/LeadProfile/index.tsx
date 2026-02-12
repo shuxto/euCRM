@@ -1,7 +1,7 @@
 // import { io } from 'socket.io-client'; // REMOVED
 import { useSocket } from '../../context/SocketContext'; // 👈 NEW
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, FileText, PenTool, History, Trash2, Server, ArrowRightLeft, TrendingUp, Edit2, AlertTriangle, X, Briefcase } from 'lucide-react'; 
+import { LayoutDashboard, FileText, PenTool, History, Trash2, Server, ArrowRightLeft, Edit2, AlertTriangle, X, Briefcase } from 'lucide-react'; 
 import { supabase } from '../../lib/supabase'; 
 import ProfileHeader from './ProfileHeader';
 import KYCSummary from './KYCSummary';
@@ -10,6 +10,7 @@ import PlatformRegistration from './PlatformRegistration';
 import LeadTransactions from './LeadTransactions';
 import LeadTradeHistory from './LeadTradeHistory';
 import LeadFinancials from './LeadFinancials';
+import LeadActivePositions from './LeadActivePositions'; // 👈 NEW IMPORT
 import TradingAccountsTab from './TradingAccountsTab'; 
 
 // ⚠️ API KEY from twelwedata.ts
@@ -117,8 +118,8 @@ export default function LeadProfilePage({ lead: initialLead, onBack }: LeadProfi
     setLoadingData(false);
   };
 
-  // --- 2. SOCKET.IO CONNECTION (VIA CONTEXT) ---
-  const { marketPrices, socket } = useSocket();
+  // --- 2. SOCKET.IO CONNECTION (Stable) ---
+  const { socket } = useSocket();
 
   useEffect(() => {
     // Safety Checks
@@ -131,46 +132,11 @@ export default function LeadProfilePage({ lead: initialLead, onBack }: LeadProfi
     if (socket.connected) {
         socket.emit('subscribe', { action: "subscribe", params: { symbols } });
     }
-
-    // We don't need to listen for 'price_update' here because the Context handles it
-    // and puts it into 'marketPrices' which we consume below.
-
   }, [dbTrades.length, activeTab, socket]); 
   
-  // Note: We use 'marketPrices' from context directly in the render logic below.
-  // We sync it to local state just to keep the diff minimal if needed, 
-  // OR we just replace 'livePrices' usage with 'marketPrices'.
-  // Let's replace usage for cleaner code.
-
-
-  // --- 3. CALCULATE LIVE PnL ---
-  const activeTradesWithLiveStats = dbTrades.map(trade => {
-      // Use GLOBAL marketPrices instead of local livePrices
-      const currentPrice = marketPrices[trade.symbol] || trade.entry_price; 
-      let pnl = 0;
-      
-      if (trade.type === 'buy') {
-          pnl = ((currentPrice - trade.entry_price) / trade.entry_price) * trade.size;
-      } else {
-          pnl = ((trade.entry_price - currentPrice) / trade.entry_price) * trade.size;
-      }
-
-      const margin = trade.margin || (trade.size / trade.leverage);
-      const roe = margin > 0 ? ((pnl / margin) * 100).toFixed(2) : "0.00";
-
-      return { ...trade, currentPrice, pnl, roe, margin };
-  });
-
-  const totalOpenPnL = activeTradesWithLiveStats.reduce((sum, t) => sum + t.pnl, 0);
-  const totalEquity = financials.mainBalance + financials.roomBalance + totalOpenPnL;
-
-  const liveFinancials = {
-      mainBalance: financials.mainBalance,
-      roomBalance: financials.roomBalance, 
-      totalEquity: totalEquity,
-      openPnL: totalOpenPnL,
-      rooms: financials.rooms 
-  };
+  // --- 3. (REMOVED) CALCULATE LIVE PnL ---
+  // We no longer calculate live PnL here to prevent re-renders. 
+  // This logic is moved to <LeadFinancials /> and <LeadActivePositions />
 
   // --- 4. MANIPULATION HANDLERS ---
   const handleEditClick = (trade: any) => {
@@ -240,103 +206,18 @@ export default function LeadProfilePage({ lead: initialLead, onBack }: LeadProfi
           {/* LEFT: FINANCIALS & TRADES */}
           <div className="col-span-12 lg:col-span-9 space-y-6"> 
             
-            <LeadFinancials financials={liveFinancials} loading={loadingData} />
+            <LeadFinancials 
+                mainBalance={financials.mainBalance} 
+                rooms={financials.rooms}
+                trades={dbTrades}
+                loading={loadingData} 
+            />
 
             {/* LIVE MARKET TABLE */}
-            <div className="glass-panel p-6 rounded-xl border border-white/5 min-h-75 overflow-hidden relative">
-               <div className="flex justify-between items-center mb-4">
-                   <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                     <TrendingUp size={18} className="text-green-500" /> 
-                     Active Open Positions
-                   </h3>
-                   <div className="flex items-center gap-2">
-                      <span className="flex items-center gap-1.5 px-2 py-1 bg-green-500/10 rounded text-[10px] text-green-400 font-bold uppercase border border-green-500/20">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                          </span>
-                          Live Feed
-                      </span>
-                   </div>
-               </div>
-               
-               {activeTradesWithLiveStats.length === 0 ? (
-                   <div className="w-full h-48 border-2 border-dashed border-white/10 rounded-xl flex items-center justify-center text-gray-500 text-sm italic">
-                     No active positions open.
-                   </div>
-               ) : (
-                   <div className="overflow-x-auto">
-                       <table className="w-full text-left text-xs">
-                           <thead className="text-gray-500 uppercase border-b border-white/5">
-                               <tr>
-                                   <th className="pb-3 pl-2">Symbol</th>
-                                   <th className="pb-3 text-center">Side</th>
-                                   <th className="pb-3 text-center">Size</th>
-                                   <th className="pb-3 text-right">Entry</th>
-                                   <th className="pb-3 text-right">Mark Price</th>
-                                   <th className="pb-3 text-right">TP</th>
-                                   <th className="pb-3 text-right">SL</th>
-                                   <th className="pb-3 text-right">Liq.</th>
-                                   <th className="pb-3 text-right pr-2">PnL (ROE%)</th>
-                               </tr>
-                           </thead>
-                           <tbody className="divide-y divide-white/5">
-                               {activeTradesWithLiveStats.map(t => {
-                                   const isProfit = t.pnl >= 0;
-                                   const sideColor = t.type === 'buy' ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10';
-                                   
-                                   return (
-                                       <tr key={t.id} className="hover:bg-white/5 transition group">
-                                           <td className="py-3 pl-2 font-bold text-white">
-                                               {t.symbol}
-                                               <span className="block text-[9px] text-gray-500 font-normal">{t.leverage}x</span>
-                                           </td>
-                                           <td className="py-3 text-center">
-                                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${sideColor}`}>
-                                                   {t.type}
-                                               </span>
-                                           </td>
-                                           <td className="py-3 text-center text-gray-300">{Number(t.size).toLocaleString()}</td>
-                                           
-                                           <td className="py-3 text-right text-gray-300 relative group-hover:text-blue-200 transition-colors">
-                                               {Number(t.entry_price).toLocaleString()}
-                                               <button 
-                                                   onClick={(e) => { e.stopPropagation(); handleEditClick(t); }}
-                                                   className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-500 text-white rounded-full opacity-0 group-hover:opacity-100 hover:bg-blue-400 transition-all shadow-lg z-10"
-                                                   title="Manipulate Price"
-                                               >
-                                                   <Edit2 size={12} />
-                                               </button>
-                                           </td>
-
-                                           <td className="py-3 text-right text-yellow-500 font-mono font-bold animate-pulse">
-                                               {Number(t.currentPrice).toLocaleString()}
-                                           </td>
-                                           <td className="py-3 text-right text-green-400/70 font-mono">
-                                               {t.take_profit ? Number(t.take_profit).toLocaleString() : '-'}
-                                           </td>
-                                           <td className="py-3 text-right text-red-400/70 font-mono">
-                                               {t.stop_loss ? Number(t.stop_loss).toLocaleString() : '-'}
-                                           </td>
-                                           <td className="py-3 text-right text-orange-400/70 font-mono">
-                                                {t.liquidation_price ? Number(t.liquidation_price).toLocaleString() : '-'}
-                                           </td>
-                                           <td className="py-3 text-right pr-2">
-                                               <div className={`font-bold font-mono text-sm ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-                                                   {isProfit ? '+' : ''}{Number(t.pnl).toFixed(2)}
-                                               </div>
-                                               <div className={`text-[9px] font-bold ${isProfit ? 'text-green-500/70' : 'text-red-500/70'}`}>
-                                                   ({isProfit ? '+' : ''}{t.roe}%)
-                                               </div>
-                                           </td>
-                                       </tr>
-                                   );
-                               })}
-                           </tbody>
-                       </table>
-                   </div>
-               )}
-            </div>
+            <LeadActivePositions 
+                trades={dbTrades} 
+                onEditTrade={handleEditClick}
+            />
 
           </div>
 

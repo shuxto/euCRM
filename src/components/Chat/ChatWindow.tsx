@@ -26,14 +26,16 @@ export default function ChatWindow() {
     // Case 2: Messages Added
     if (messages.length > prevMessagesLength.current) {
         const isLoadOlder = loadingMore; 
+        const isInitialLoad = prevMessagesLength.current === 0; // Check if this is the first batch
 
         if (isLoadOlder) {
-            // Maintain position (TODO: Precise calc if needed, for now do nothing or adjust scrollTop)
-            // Ideally we'd measure scrollHeight diff, but for now just don't scroll to bottom.
+            // Maintain position (TODO: Precise calc if needed)
         } else {
-             // New Message -> Smooth scroll
+             // New Message -> Smooth scroll ONLY if not initial load
              if (bottomRef.current) {
-                bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+                bottomRef.current.scrollIntoView({ 
+                    behavior: isInitialLoad ? 'auto' : 'smooth' 
+                });
             }
         }
     }

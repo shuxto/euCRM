@@ -74,7 +74,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setIsDataLoaded(true);
             
             // Fetch Initial Counts
-            fetchUnreadCounts(user.id);
+            fetchUnreadCounts();
             if (user.user_metadata?.role) fetchSupportUnreads(user.id, user.user_metadata.role);
         }
     };
@@ -83,11 +83,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // 2. HELPER FETCHERS
-  const fetchUnreadCounts = async (uid: string) => {
-      const { data } = await supabase.from('crm_messages').select('sender_id, room_id').eq('read', false);
+  const fetchUnreadCounts = async () => {
+      // FIX: Use the View which handles the new `crm_read_status` logic
+      const { data } = await supabase.from('crm_my_rooms').select('type, unread_count');
       if (data) {
-          const validUnreads = data.filter(msg => msg.sender_id !== uid && msg.room_id !== GLOBAL_CHAT_ID);
-          setUnreadDM(validUnreads.length);
+          const globalUnread = data
+            .filter((r: any) => r.type === 'global')
+            .reduce((sum, r: any) => sum + (r.unread_count || 0), 0);
+            
+          const dmUnread = data
+            .filter((r: any) => r.type !== 'global')
+            .reduce((sum, r: any) => sum + (r.unread_count || 0), 0);
+
+          setUnreadGlobal(globalUnread);
+          setUnreadDM(dmUnread);
       }
   };
 
@@ -101,7 +110,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!userId) return;
 
       const channel = supabase.channel('app-global-notifications')
-          // CHAT MESSAGES
+          // CHAT MESSAGES (INCREMENT)
           .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_messages' }, (payload) => {
               const newMsg = payload.new;
               if (newMsg.sender_id === userId) return;
@@ -113,6 +122,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   setUnreadDM(prev => prev + 1);
                   setMyRooms(prev => new Set(prev).add(newMsg.room_id)); 
               }
+          })
+          // READ STATUS (DECREMENT / RECALCULATE)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_read_status', filter: `user_id=eq.${userId}` }, () => {
+              fetchUnreadCounts();
           })
           // SUPPORT MESSAGES
           .on('postgres_changes', { event: '*', schema: 'public', table: 'support_messages' }, () => {

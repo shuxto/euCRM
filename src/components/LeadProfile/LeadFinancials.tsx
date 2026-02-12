@@ -1,19 +1,44 @@
 import { Wallet, Layers, Briefcase, TrendingUp } from 'lucide-react';
+import { useMarketData } from '../../context/SocketContext';
 
 interface Props {
-  financials: {
-    mainBalance: number;
-    roomBalance: number;
-    totalEquity: number;
-    openPnL: number;
-    rooms: { name: string; balance: number }[];
-  };
+  // Static/DB Data
+  mainBalance: number;
+  rooms: { name: string; balance: number }[];
+  trades: any[]; 
   loading: boolean;
 }
 
-export default function LeadFinancials({ financials, loading }: Props) {
-  // Calculate Total Cash (Without PnL) for the middle box
-  const totalCash = financials.mainBalance + financials.roomBalance;
+export default function LeadFinancials({ mainBalance, rooms = [], trades = [], loading }: Props) {
+  // 🟢 Live Market Data
+  const { marketPrices } = useMarketData();
+
+  // 1. Calculate Room Balance
+  const roomBalance = rooms.reduce((sum, room) => sum + (room.balance || 0), 0);
+  
+  // 2. Calculate Total Cash
+  const totalCash = mainBalance + roomBalance;
+
+  // 3. Calculate Live PnL
+  const openPnL = trades.reduce((sum, t) => {
+      const currentPrice = marketPrices[t.symbol] || t.entry_price || 0;
+      let pnl = 0;
+      
+      const entry = parseFloat(t.entry_price) || 0;
+      const size = parseFloat(t.size) || 0;
+
+      if (entry > 0) {
+          if (t.type === 'buy') {
+              pnl = ((currentPrice - entry) / entry) * size;
+          } else {
+              pnl = ((entry - currentPrice) / entry) * size;
+          }
+      }
+      return sum + pnl;
+  }, 0);
+
+  // 4. Calculate Total Equity
+  const totalEquity = totalCash + openPnL;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -31,13 +56,13 @@ export default function LeadFinancials({ financials, loading }: Props) {
               <span className="text-[10px] font-bold uppercase tracking-wider">Live Net Worth</span>
            </div>
            <p className="text-2xl font-bold text-white font-mono mt-1">
-             {loading ? "..." : `$${financials.totalEquity.toLocaleString(undefined, {minimumFractionDigits: 2})}`}
+             {loading ? "..." : `$${totalEquity.toLocaleString(undefined, {minimumFractionDigits: 2})}`}
            </p>
         </div>
         <div className="mt-2">
              <div className="flex items-center gap-2">
-                <span className={`text-xs font-mono font-bold ${financials.openPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {financials.openPnL > 0 ? '+' : ''}{financials.openPnL.toLocaleString(undefined, {minimumFractionDigits: 2})
+                <span className={`text-xs font-mono font-bold ${openPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {openPnL > 0 ? '+' : ''}{openPnL.toLocaleString(undefined, {minimumFractionDigits: 2})
                 }</span>
                 <span className="text-[10px] text-gray-500 uppercase">Live PnL</span>
              </div>
@@ -61,7 +86,7 @@ export default function LeadFinancials({ financials, loading }: Props) {
         <div className="mt-2 pt-2 border-t border-white/5 flex justify-between items-center">
              <span className="text-[10px] text-gray-500 uppercase font-bold">Main Wallet:</span>
              <span className="text-xs font-mono text-white">
-                ${financials.mainBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                ${mainBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
              </span>
         </div>
       </div>
@@ -77,18 +102,18 @@ export default function LeadFinancials({ financials, loading }: Props) {
               <span className="text-[10px] font-bold uppercase tracking-wider">Trading Accounts</span>
             </div>
             <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300">
-                {financials.rooms.length}
+                {rooms.length}
             </span>
         </div>
 
         {/* Scrollable List */}
         <div className="overflow-y-auto custom-scrollbar p-2 space-y-1">
-            {financials.rooms.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-gray-500 text-[10px] italic py-4">
+            {rooms.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 text-sm italic py-4">
                     No accounts found
                 </div>
             ) : (
-                financials.rooms.map((room, idx) => (
+                rooms.map((room, idx) => (
                     <div key={idx} className="flex justify-between items-center px-3 py-2 rounded-lg hover:bg-white/5 transition-colors group">
                         <div className="flex items-center gap-2 overflow-hidden">
                             <div className="w-1.5 h-1.5 rounded-full bg-yellow-500/50 group-hover:bg-yellow-400 transition-colors"></div>

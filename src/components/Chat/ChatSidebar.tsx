@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useChatContext } from '../../context/ChatContext'; 
 import { supabase } from '../../lib/supabase';
-// FIX: Removed 'Hash' from imports
 import { 
-    Lock, Users, Plus, Search, 
+    Lock, Users, Search, 
     Globe, RefreshCcw, TrendingUp, Megaphone, Crown, Code
 } from 'lucide-react';
 
@@ -33,15 +32,10 @@ export default function ChatSidebar() {
     return () => clearInterval(interval);
   }, [currentUser]);
 
-  const isVisibleRoom = (r: any) => {
-      const name = (r.name || '').toLowerCase();
-      if (name.includes('tech support')) return false;
-      if (name.includes('it support')) return false;
-      return true;
-  };
-
-  const companyRooms = rooms.filter(r => (r.type === 'global' || r.type === 'department') && isVisibleRoom(r));
-  const teamGroups = rooms.filter(r => r.type === 'group' && isVisibleRoom(r));
+  const companyRooms = rooms.filter(r => r.type === 'global' || r.type === 'department');
+  
+  // NOTE: "Teams" (Group chats) are intentionally hidden as per user request (2026-02-12)
+  // const teamGroups = rooms.filter(r => r.type === 'group');
 
   const getRoomIcon = (room: any) => {
     if (room.type === 'global') return <Globe size={16} className="text-blue-400" />;
@@ -59,9 +53,32 @@ export default function ChatSidebar() {
     return <Users size={16} className="text-indigo-400" />;
   };
 
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
+  // Sync selectedUserId when activeRoom changes from external sources (e.g. initial load)
+  useEffect(() => {
+    if (activeRoom) {
+        const room = rooms.find(r => r.id === activeRoom);
+        if (room && room.type === 'dm') {
+            // Try to find the other user ID from our known params
+            if (room.dm_target_id) {
+                setSelectedUserId(room.dm_target_id);
+            } else if (room.participants) {
+                const other = room.participants.find(p => p.user.id !== currentUser?.id);
+                if (other) setSelectedUserId(other.user.id);
+            }
+        } else if (room && room.type !== 'dm') {
+            setSelectedUserId(null);
+        }
+    }
+  }, [activeRoom, rooms, currentUser]);
+
   const handleUserClick = async (userId: string) => {
-      await createOrOpenDM(userId);
+      // Optimistic Update: Immediately highlight the user
+      setSelectedUserId(userId);
       setSearchTerm('');
+      
+      await createOrOpenDM(userId);
   };
 
   // MERGE & SORT USERS
@@ -69,7 +86,7 @@ export default function ChatSidebar() {
       // Find the DM room for this user
       const dmRoom = rooms.find(r => 
           r.type === 'dm' && 
-          r.participants?.some(p => p.user.id === user.id)
+          (r.dm_target_id === user.id || r.participants?.some(p => p.user.id === user.id))
       );
       
       // Calculate Interaction Time
@@ -103,9 +120,6 @@ export default function ChatSidebar() {
     <div className="w-72 bg-black/20 border-r border-white/5 flex flex-col h-full shrink-0">
       <div className="p-4 border-b border-white/5 flex justify-between items-center">
         <h2 className="text-white font-bold tracking-wide">Workspace</h2>
-        <button className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition">
-           <Plus size={18} />
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-6">
@@ -136,28 +150,7 @@ export default function ChatSidebar() {
             </div>
         </div>
 
-        {/* TEAMS */}
-        {teamGroups.length > 0 && (
-            <div>
-                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 px-2">Teams</h3>
-                <div className="space-y-1">
-                    {teamGroups.map(room => (
-                        <div 
-                            key={room.id} 
-                            onClick={() => setActiveRoom(room.id)} 
-                            className={`px-3 py-2 rounded-lg flex items-center gap-3 cursor-pointer transition-all ${
-                                activeRoom === room.id 
-                                ? 'bg-indigo-600 text-white shadow-lg' 
-                                : 'hover:bg-white/5 text-gray-400 hover:text-white'
-                            }`}
-                        >
-                            <Users size={16} className="opacity-70" />
-                            <span className="text-sm font-medium">{room.name}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )}
+        {/* TEAMS SECTION HIDDEN */}
 
         {/* DIRECT MESSAGES / ALL USERS */}
         <div>
@@ -181,13 +174,14 @@ export default function ChatSidebar() {
                     </div>
                 ) : (
                     displayedUsers.map(user => {
-                        // Use pre-calculated DM room (or find if not mapped yet, though it should be)
+                        // Use pre-calculated DM room (or find if not mapped yet)
                         const activeDmRoom = user.dmRoom || rooms.find(r => 
                             r.type === 'dm' && 
-                            r.participants?.some(p => p.user.id === user.id)
+                            (r.dm_target_id === user.id || r.participants?.some(p => p.user.id === user.id))
                         );
                         
-                        const isActive = activeRoom === activeDmRoom?.id;
+                        // Robust Active Check: Room ID match OR Optimistic User ID match
+                        const isActive = (activeRoom && activeDmRoom && activeRoom === activeDmRoom.id) || (selectedUserId === user.id);
                         const unread = activeDmRoom?.unread_count || 0;
 
                         // ONLINE CHECK (5 minute buffer)
@@ -198,7 +192,9 @@ export default function ChatSidebar() {
                                 key={user.id} 
                                 onClick={() => handleUserClick(user.id)} 
                                 className={`px-2 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer transition-all group ${
-                                    isActive ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-gray-400 hover:text-gray-200'
+                                    isActive 
+                                    ? 'bg-blue-600/30 text-white border border-blue-500/30 shadow-[0_0_10px_rgba(37,99,235,0.2)]' 
+                                    : 'hover:bg-white/5 text-gray-400 hover:text-gray-200 border border-transparent'
                                 }`}
                             >
                                 <div className="relative">
