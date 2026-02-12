@@ -120,26 +120,74 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const channel = supabase.channel('global-chat-listener')
       .on('postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'crm_messages' }, 
-        (payload) => {
+        async (payload) => {
            const newMsg = payload.new;
-           // Optimistic Update: Increment unread count for this room if we aren't in it
-           if (newMsg.room_id !== activeRoom && newMsg.sender_id !== currentUser.id) {
-               setRooms(prev => prev.map(r => 
-                   r.id === newMsg.room_id 
-                   ? { ...r, unread_count: (r.unread_count || 0) + 1, last_message_at: newMsg.created_at }
-                   : r
-               ));
-           } else if (newMsg.room_id === activeRoom) {
-               // If we are in it, just update the last message time
-                setRooms(prev => prev.map(r => 
-                   r.id === newMsg.room_id 
-                   ? { ...r, last_message_at: newMsg.created_at }
-                   : r
-               ));
-           }
+           
+           // Check if we already have this room in our list
+           setRooms(prevRooms => {
+               const roomExists = prevRooms.find(r => r.id === newMsg.room_id);
+               
+               if (roomExists) {
+                   // UPDATE EXISTING ROOM
+                   return prevRooms.map(r => {
+                       if (r.id === newMsg.room_id) {
+                           // Only increment unread if MSG is NOT from me AND I'm not in the room
+                           const isFromMe = newMsg.sender_id === currentUser.id;
+                           const isUnread = !isFromMe && r.id !== activeRoom;
+                           
+                           return {
+                               ...r,
+                               last_message_at: newMsg.created_at,
+                               unread_count: isUnread 
+                                  ? (r.unread_count || 0) + 1 
+                                  : (isFromMe ? 0 : r.unread_count) // If from me, reset to 0 (implied read)
+                           };
+                       }
+                       return r;
+                   });
+               } else {
+                   // NEW ROOM FOUND (e.g. Incoming DM from someone new)
+                   // We won't add it here inside the setState because we need to fetch it first.
+                   // The async fetch below will handle adding it.
+                   return prevRooms;
+               }
+           });
 
-           // Still fetch eventually to ensure data consistency
-           fetchRooms();
+           // If we didn't have the room, OR to ensure consistency, we fetch.
+           // Ideally, for a NEW room, we want to fetch just that room to be fast.
+           const { data: newRoomData } = await supabase
+               .from('crm_my_rooms') 
+               .select('*')
+               .eq('id', newMsg.room_id)
+               .single();
+
+           if (newRoomData) {
+               const mappedNewRoom = {
+                   id: newRoomData.id,
+                   name: newRoomData.display_name || newRoomData.name,
+                   type: newRoomData.type,
+                   unread_count: newRoomData.unread_count, // Should be at least 1 now if calculated by server, but server view might lag.
+                   avatar_url: newRoomData.display_avatar || newRoomData.avatar_url,
+                   last_message_at: newMsg.created_at, // Trust the message time
+                   created_at: newRoomData.created_at,
+                   dm_target_id: newRoomData.dm_target_id
+               };
+
+               setRooms(prev => {
+                   const exists = prev.find(r => r.id === mappedNewRoom.id);
+                   if (exists) {
+                       // We might have optimistically updated it above, but let's just ensure we have latest View data
+                       // BUT preserve our optimistic unread count if strictly greater (handling race conditions)
+                       return prev.map(r => r.id === mappedNewRoom.id ? { ...mappedNewRoom, unread_count: Math.max(r.unread_count || 0, mappedNewRoom.unread_count || 0) } : r);
+                   } else {
+                       // ADD NEW ROOM
+                       return [mappedNewRoom, ...prev];
+                   }
+               });
+           } else {
+               // Fallback: Refresh all if specific fetch failed for some reason (RLS?)
+               fetchRooms();
+           }
         }
       )
       .on('postgres_changes', 
@@ -156,7 +204,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     fetchRooms();
 
     return () => { supabase.removeChannel(channel); };
-  }, [currentUser]);
+  }, [currentUser, activeRoom]); // Add activeRoom dependency to ensure closure has latest state for optimistic check
 
   // LOAD MESSAGES (With strict Sender Fetching)
   useEffect(() => {
