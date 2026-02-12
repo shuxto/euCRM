@@ -37,13 +37,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // --- 1. FETCH ROOMS (OPTIMIZED VIEW) ---
+  // --- 1. FETCH ROOMS (OPTIMIZED VIEW WITH VIEW-PATCHING) ---
   const fetchRooms = async (userOverride?: any) => {
     const user = userOverride || currentUser;
     if(!user) return;
 
     // The View does ALL the heavy lifting
-    const { data, error } = await supabase
+    const { data: roomsData, error } = await supabase
         .from('crm_my_rooms') 
         .select('*')
         .order('last_message_at', { ascending: false });
@@ -53,20 +53,60 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         return;
     }
 
+    // --- VIEW PATCHING START ---
+    // The View can be stale (lag behind real-time). 
+    // We fetch the latest messages explicitly to patch the `last_message_at`
+    const { data: latestMessages } = await supabase
+        .from('crm_messages')
+        .select('room_id, created_at, sender_id')
+        .or(`sender_id.eq.${user.id},room_id.in.(${roomsData.map((r:any) => r.id).join(',')})`) // Efficient filter? Maybe just order by created_at.
+        // Actually, simple is better: order by created_at desc limit 50. 
+        // We can't filter by "my rooms" easily without a join, but we can filter by "sent by me OR sent to me (if DM)"
+        // Let's just fetch latest global 50 messages for rooms I am in.
+        .in('room_id', roomsData.map((r:any) => r.id))
+        .order('created_at', { ascending: false })
+        .limit(50);
+        
+    const patchMap = new Map<string, string>();
+    if (latestMessages) {
+        latestMessages.forEach((msg: any) => {
+             if (!patchMap.has(msg.room_id)) {
+                 patchMap.set(msg.room_id, msg.created_at);
+             }
+        });
+    }
+    // --- VIEW PATCHING END ---
+
     // Map View Data to internal state
-    const mappedRooms = (data || []).map((r: any) => ({
-        id: r.id,
-        name: r.display_name || r.name, // View handles DM naming
-        type: r.type,
-        unread_count: r.unread_count,
-        avatar_url: r.display_avatar || r.avatar_url, // View handles DM avatars
-        last_message_at: r.last_message_at,
-        created_at: r.created_at,
-        dm_target_id: r.dm_target_id // New field for UI matching
-    }));
+    const mappedRooms = (roomsData || []).map((r: any) => {
+        // PATCH: Use the latest message time if it's newer than the view's time
+        const viewTime = r.last_message_at;
+        const patchedTime = patchMap.get(r.id);
+        const finalTime = (patchedTime && (!viewTime || new Date(patchedTime) > new Date(viewTime))) 
+            ? patchedTime 
+            : viewTime;
+
+        return {
+            id: r.id,
+            name: r.display_name || r.name, // View handles DM naming
+            type: r.type,
+            unread_count: r.unread_count,
+            avatar_url: r.display_avatar || r.avatar_url, // View handles DM avatars
+            last_message_at: finalTime,
+            created_at: r.created_at,
+            dm_target_id: r.dm_target_id // New field for UI matching
+        };
+    });
+
+    // Sort again because patching might have changed order
+    mappedRooms.sort((a: any, b: any) => {
+        const tA = new Date(a.last_message_at || a.created_at || 0).getTime();
+        const tB = new Date(b.last_message_at || b.created_at || 0).getTime();
+        return tB - tA;
+    });
 
     setRooms(prevRooms => {
-        // Smart Merge: Keep local optimistic `last_message_at` if it's newer than server's
+        // Smart Merge: Keep local optimistic `last_message_at` if it's newer than server's (even patched server)
         const merged = mappedRooms.map((serverRoom: any) => {
             const localRoom = prevRooms.find(r => r.id === serverRoom.id);
             if (localRoom && localRoom.last_message_at && serverRoom.last_message_at) {
@@ -408,4 +448,4 @@ export const useChatContext = () => {
   const context = useContext(ChatContext);
   if (!context) throw new Error("useChatContext must be used within ChatProvider");
   return context;
-};
+};  
