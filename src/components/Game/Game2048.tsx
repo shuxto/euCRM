@@ -208,7 +208,7 @@ export default function Game2048({ onClose, currentUserRole, currentUserId }: Ga
   };
 
   const addRandomTile = (currentGrid: (TileObj|null)[][]) => {
-    const emptyCells = [];
+    const emptyCells: { r: number; c: number }[] = [];
     for (let r = 0; r < SIZE; r++) {
       for (let c = 0; c < SIZE; c++) {
         if (!currentGrid[r][c]) emptyCells.push({ r, c });
@@ -349,7 +349,7 @@ await supabase.from('crm_game_scores').upsert(
   };
 
   // --- RENDER HELPERS ---
-  const tilesToRender = [];
+  const tilesToRender: (TileObj & { r: number; c: number })[] = [];
   
   // FIX 2: Defensive check just in case grid is somehow malformed
   if (grid && grid.length === SIZE) {
