@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react'; // Removed useEffect
 import { Send, Paperclip, X, Smile, Loader2 } from 'lucide-react';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
-import { supabase } from '../../lib/supabase';
+import { useChatContext } from '../../context/ChatContext'; // Changed import
 
 interface MessageInputProps {
   onSendMessage: (text: string, files: File[], mentions: string[]) => Promise<void>;
@@ -9,22 +9,20 @@ interface MessageInputProps {
 }
 
 export default function MessageInput({ onSendMessage, isLoading }: MessageInputProps) {
+  const { allUsers } = useChatContext(); // Get users from Brain
+  
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [showEmoji, setShowEmoji] = useState(false);
   
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
-  const [users, setUsers] = useState<any[]>([]);
+  // Removed local [users, setUsers] state
   const [selectedMentions, setSelectedMentions] = useState<string[]>([]);
   
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    supabase.from('crm_users').select('id, real_name, avatar_url').then(({ data }) => {
-      if(data) setUsers(data);
-    });
-  }, []);
+  // Removed useEffect (Fetching) - Logic moved to Context
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -75,7 +73,8 @@ export default function MessageInput({ onSendMessage, isLoading }: MessageInputP
     setShowEmoji(false);
   };
 
-  const filteredUsers = users.filter(u => 
+  // Use 'allUsers' from context instead of local 'users'
+  const filteredUsers = allUsers.filter(u => 
     u.real_name && u.real_name.toLowerCase().includes(mentionQuery.toLowerCase())
   );
 

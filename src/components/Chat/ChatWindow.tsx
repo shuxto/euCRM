@@ -1,11 +1,13 @@
 import { useRef, useState, useLayoutEffect } from 'react';
 import { useChatContext } from '../../context/ChatContext';
-import { Loader2, ArrowUp, FileText, Download } from 'lucide-react';
+import { Loader2, ArrowUp, FileText, Download, User, Hash } from 'lucide-react';
 
 export default function ChatWindow() {
-  const { messages, isLoading, currentUser, activeRoom, rooms, loadMoreMessages, hasMore } = useChatContext();
+  // 1. Grab 'allUsers' from the brain so we know who is who
+  const { messages, isLoading, currentUser, activeRoom, rooms, loadMoreMessages, hasMore, allUsers } = useChatContext();
+  
   const bottomRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null); // New Ref for container
+  const containerRef = useRef<HTMLDivElement>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   
   // Track previous state to determine scroll behavior
@@ -26,12 +28,12 @@ export default function ChatWindow() {
     // Case 2: Messages Added
     if (messages.length > prevMessagesLength.current) {
         const isLoadOlder = loadingMore; 
-        const isInitialLoad = prevMessagesLength.current === 0; // Check if this is the first batch
+        const isInitialLoad = prevMessagesLength.current === 0;
 
         if (isLoadOlder) {
-            // Maintain position (TODO: Precise calc if needed)
+            // Maintain position logic handled by handleLoadMore mostly
         } else {
-             // New Message -> Smooth scroll ONLY if not initial load
+             // New Message -> Smooth scroll
              if (bottomRef.current) {
                 bottomRef.current.scrollIntoView({ 
                     behavior: isInitialLoad ? 'auto' : 'smooth' 
@@ -46,16 +48,13 @@ export default function ChatWindow() {
   const handleLoadMore = async () => {
       setLoadingMore(true);
       
-      // Capture current scroll height before loading
       const container = containerRef.current;
       const oldScrollHeight = container ? container.scrollHeight : 0;
       const oldScrollTop = container ? container.scrollTop : 0;
 
       await loadMoreMessages();
       
-      // Restore position logic would go here if we used useLayoutEffect depending on re-render timing
-      // For simplified "don't jump to bottom", the effect above handles the "don't scroll" part.
-      // To keep visual position, we might need to adjust scrollTop after render.
+      // Restore scroll position after loading older messages
       requestAnimationFrame(() => {
           if (container) {
               const newScrollHeight = container.scrollHeight;
@@ -78,6 +77,56 @@ export default function ChatWindow() {
       catch { return 'File'; }
   };
 
+  // --- SMART MENTION STYLING (YELLOW ALERT) ---
+  const formatMessageContent = (msg: any) => {
+      const content = msg.content || "";
+      // Safety check: if no mentions or no users loaded yet, just show text
+      if (!msg.mentions || msg.mentions.length === 0 || !allUsers) return content;
+
+      // 1. Find the actual User objects for the IDs mentioned in this message
+      const mentionedUsers = allUsers.filter(u => msg.mentions.includes(u.id));
+      if (mentionedUsers.length === 0) return content;
+
+      // 2. Create a Regex to find "@Name" in the text
+      // We escape special characters to avoid regex crashes
+      const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pattern = new RegExp(`(${mentionedUsers.map(u => '@' + escapeRegExp(u.real_name)).join('|')})`, 'g');
+
+      // 3. Split the text and style the mentions
+      const parts = content.split(pattern);
+      return parts.map((part: string, i: number) => {
+          // Check if this specific part is one of our mentions
+          const matchUser = mentionedUsers.find(u => `@${u.real_name}` === part);
+          
+          if (matchUser) {
+              const amISender = currentUser?.id === msg.sender_id; // Did I send this?
+              const amIMentioned = currentUser?.id === matchUser.id; // Am I the one tagged?
+              
+              // DEFAULT: Gray (Neutral)
+              let colorClass = 'bg-white/10 text-gray-400 border border-white/5'; 
+
+              if (amIMentioned) {
+                  // CASE 1: I AM MENTIONED -> YELLOW (No Animation)
+                  colorClass = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40';
+              } else if (amISender) {
+                  // CASE 2: I SENT IT -> BLUE (No Animation)
+                  colorClass = 'bg-blue-500/20 text-blue-400 border border-blue-500/40';
+              }
+              
+              return (
+                  <span 
+                    key={i} 
+                    className={`font-bold px-1.5 py-0.5 rounded text-xs mx-0.5 transition-all inline-block ${colorClass}`}
+                  >
+                      {part}
+                  </span>
+              );
+          }
+          // Regular text
+          return part;
+      });
+  };
+
   if (!activeRoom) {
     return (
       <div className="flex-1 flex items-center justify-center bg-black/40 text-gray-500">
@@ -90,12 +139,30 @@ export default function ChatWindow() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-black/20">
+      
+      {/* HEADER */}
       <div className="h-14 border-b border-white/5 flex items-center px-6 justify-between bg-black/40">
-        <div>
-            <h2 className="text-white font-bold">{currentRoom?.name || 'Chat'}</h2>
-            <p className="text-[10px] text-gray-400">
-                {currentRoom?.type === 'dm' ? 'Direct Message' : 'Secure Channel'}
-            </p>
+        <div className="flex items-center gap-3">
+             {/* AVATAR FOR DM */}
+             {currentRoom?.type === 'dm' ? (
+                 currentRoom.display_avatar ? (
+                    <img src={currentRoom.display_avatar} className="w-8 h-8 rounded-full object-cover border border-white/10" />
+                 ) : (
+                    <User size={20} className="text-gray-400" />
+                 )
+             ) : (
+                 <Hash size={20} className="text-gray-400" />
+             )}
+             
+            <div>
+                {/* SMART NAME: Shows "John Doe" instead of "dm-123" */}
+                <h2 className="text-white font-bold">
+                    {currentRoom?.display_name || currentRoom?.name || 'Chat'}
+                </h2>
+                <p className="text-[10px] text-gray-400">
+                    {currentRoom?.type === 'dm' ? 'Direct Message' : 'Secure Channel'}
+                </p>
+            </div>
         </div>
       </div>
 
@@ -123,10 +190,8 @@ export default function ChatWindow() {
             // LOGIC CHECK: Are we the sender?
             const isMe = currentUser && msg.sender_id === currentUser.id;
             
-            // FIXED: Removed '!isMe' so YOU can see your own avatar too
+            // Show avatar if it's the first message in a sequence from this user
             const showAvatar = index === 0 || messages[index - 1].sender_id !== msg.sender_id;
-            
-            // FIXED: Removed '!isMe' so YOU can see your own name too
             const showName = showAvatar; 
 
             return (
@@ -152,7 +217,7 @@ export default function ChatWindow() {
                 {/* MESSAGE COLUMN */}
                 <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%]`}>
                     
-                    {/* SENDER NAME (Now shows for everyone) */}
+                    {/* SENDER NAME */}
                     {showName && (
                         <span className={`text-[10px] text-gray-400 mb-1 ${isMe ? 'mr-1' : 'ml-1'}`}>
                             {msg.sender?.real_name || 'Unknown User'}
@@ -193,8 +258,8 @@ export default function ChatWindow() {
                             </div>
                         )}
                         
-                        {/* TEXT */}
-                        <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                        {/* TEXT CONTENT (Using Smart Formatter) */}
+                        <p className="leading-relaxed whitespace-pre-wrap">{formatMessageContent(msg)}</p>
                     </div>
                     
                     {/* TIME */}
@@ -203,7 +268,7 @@ export default function ChatWindow() {
                     </span>
                 </div>
 
-                {/* RIGHT AVATAR (ME) - Added this block */}
+                {/* RIGHT AVATAR (ME) */}
                 {isMe && (
                   <div className="w-8 shrink-0 flex flex-col items-center">
                     {showAvatar ? (

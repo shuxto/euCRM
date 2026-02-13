@@ -24,11 +24,11 @@ export interface ChatMessage {
 export interface ChatRoom {
   id: string;
   name: string;
-  type: 'global' | 'department' | 'group' | 'dm';
+  type: 'global' | 'department' | 'group' | 'dm' | 'channel'; // Added 'channel' to be safe
   allowed_roles?: string[];
   dm_target_id?: string;
   
-  // View Properties (Calculated)
+  // View Properties (Calculated from SQL View)
   display_name?: string; 
   display_avatar?: string;
   unread_count: number; 

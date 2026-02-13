@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import type { ChatMessage, ChatRoom } from '../types/chat';
+import type { ChatMessage, ChatRoom, ChatUser } from '../types/chat';
 
 interface ChatContextType {
   activeRoom: string | null;
@@ -14,6 +14,7 @@ interface ChatContextType {
   currentUser: any;
   hasMore: boolean;
   createGroup: (name: string, participantIds: string[]) => Promise<string | null>;
+  allUsers: ChatUser[];
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -25,25 +26,48 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  
+  // --- NEW: Store All Users for Mentions ---
+  const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
 
   const MESSAGES_PER_PAGE = 50;
 
+  // 1. INIT: Load User & Rooms
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         setCurrentUser(data.user);
-        fetchRooms(data.user); // Now strict-safe
+        fetchRooms(data.user); 
+        fetchAllUsers(); // <--- ADD THIS
       }
     });
   }, []);
 
-  // --- 1. FETCH ROOMS (OPTIMIZED VIEW WITH VIEW-PATCHING) ---
+  // --- NEW: Fetch All Users Function ---
+  const fetchAllUsers = async () => {
+      const { data } = await supabase
+        .from('crm_users')
+        .select('id, real_name, avatar_url, role')
+        .order('real_name');
+      
+      if (data) {
+          const mappedUsers = data.map((u: any) => ({
+              id: u.id,
+              real_name: u.real_name,
+              avatar_url: u.avatar_url,
+              role: u.role
+          }));
+          setAllUsers(mappedUsers);
+      }
+  };
+
+  // 2. FETCH ROOMS (From the new Smart View)
   const fetchRooms = async (userOverride?: any) => {
     const user = userOverride || currentUser;
     if(!user) return;
 
-    // The View does ALL the heavy lifting
-    const { data: roomsData, error } = await supabase
+    // QUERY THE VIEW
+    const { data, error } = await supabase
         .from('crm_my_rooms') 
         .select('*')
         .order('last_message_at', { ascending: false });
@@ -53,210 +77,92 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         return;
     }
 
-    // --- VIEW PATCHING START ---
-    // The View can be stale (lag behind real-time). 
-    // We fetch the latest messages explicitly to patch the `last_message_at`
-    const { data: latestMessages } = await supabase
-        .from('crm_messages')
-        .select('room_id, created_at, sender_id')
-        .or(`sender_id.eq.${user.id},room_id.in.(${roomsData.map((r:any) => r.id).join(',')})`) // Efficient filter? Maybe just order by created_at.
-        // Actually, simple is better: order by created_at desc limit 50. 
-        // We can't filter by "my rooms" easily without a join, but we can filter by "sent by me OR sent to me (if DM)"
-        // Let's just fetch latest global 50 messages for rooms I am in.
-        .in('room_id', roomsData.map((r:any) => r.id))
-        .order('created_at', { ascending: false })
-        .limit(50);
+    // Map raw data to our Types
+    const mappedRooms: ChatRoom[] = (data || []).map((r: any) => ({
+        id: r.id,
+        name: r.original_name || r.name, // Fallback
+        type: r.type,
+        unread_count: r.unread_count || 0,
+        last_message_at: r.last_message_at,
+        created_at: r.created_at,
         
-    const patchMap = new Map<string, string>();
-    if (latestMessages) {
-        latestMessages.forEach((msg: any) => {
-             if (!patchMap.has(msg.room_id)) {
-                 patchMap.set(msg.room_id, msg.created_at);
-             }
-        });
-    }
-    // --- VIEW PATCHING END ---
+        // Smart View Fields
+        display_name: r.display_name,
+        display_avatar: r.display_avatar,
+        dm_target_id: r.dm_target_id,
+        allowed_roles: r.allowed_roles
+    }));
 
-    // Map View Data to internal state
-    const mappedRooms = (roomsData || []).map((r: any) => {
-        // PATCH: Use the latest message time if it's newer than the view's time
-        const viewTime = r.last_message_at;
-        const patchedTime = patchMap.get(r.id);
-        const finalTime = (patchedTime && (!viewTime || new Date(patchedTime) > new Date(viewTime))) 
-            ? patchedTime 
-            : viewTime;
-
-        return {
-            id: r.id,
-            name: r.display_name || r.name, // View handles DM naming
-            type: r.type,
-            unread_count: r.unread_count,
-            avatar_url: r.display_avatar || r.avatar_url, // View handles DM avatars
-            last_message_at: finalTime,
-            created_at: r.created_at,
-            dm_target_id: r.dm_target_id // New field for UI matching
-        };
-    });
-
-    // Sort again because patching might have changed order
-    mappedRooms.sort((a: any, b: any) => {
-        const tA = new Date(a.last_message_at || a.created_at || 0).getTime();
-        const tB = new Date(b.last_message_at || b.created_at || 0).getTime();
-        return tB - tA;
-    });
-
-    setRooms(prevRooms => {
-        // Smart Merge: Keep local optimistic `last_message_at` if it's newer than server's (even patched server)
-        const merged = mappedRooms.map((serverRoom: any) => {
-            const localRoom = prevRooms.find(r => r.id === serverRoom.id);
-            if (localRoom && localRoom.last_message_at && serverRoom.last_message_at) {
-                const localTime = new Date(localRoom.last_message_at).getTime();
-                const serverTime = new Date(serverRoom.last_message_at).getTime();
-                // If local state is newer (e.g. from realtime event), trust local state
-                if (localTime > serverTime) {
-                    return { 
-                        ...serverRoom, 
-                        last_message_at: localRoom.last_message_at,
-                        unread_count: localRoom.unread_count // PRESERVE OPTIMISTIC COUNT
-                    };
-                }
-            }
-            return serverRoom;
-        });
-
-        // SAFETY: If activeRoom is missing from server (View Lag), preserve it from local state
-        // This is CRITICAL for new DMs/Groups that haven't propagated to the View yet
-        if (activeRoom) {
-            const isActiveRoomMissing = !merged.find((r: any) => r.id === activeRoom);
-            if (isActiveRoomMissing) {
-                const localActiveRoom = prevRooms.find(r => r.id === activeRoom);
-                if (localActiveRoom) {
-                    merged.push(localActiveRoom);
-                }
-            }
-        }
-
-        return merged;
-    });
+    setRooms(mappedRooms);
   };
 
-  // AUTO-SELECT GLOBAL (Only on initial load if nothing selected)
-  useEffect(() => {
-      if (rooms.length > 0 && !activeRoom) {
-          // Double check we haven't selected something in the meantime
-          // But actually, we want to ensure we don't overwrite if user is navigating.
-          // This effect runs when `rooms` updates. 
-          // If activeRoom is null, select global.
-          const global = rooms.find(r => r.type === 'global');
-          if (global) setActiveRoom(global.id);
-      }
-  }, [rooms, activeRoom]);
-
-  // --- 2. GLOBAL LISTENER (Refreshes View on New Messages) ---
+  // 3. THE LIVE LISTENER (Fixes the "Refresh" bug)
   useEffect(() => {
     if (!currentUser) return;
-    
-    // We listen for ANY new message where we are a participant/viewer
+
+    // Listen to ALL new messages in the system
     const channel = supabase.channel('global-chat-listener')
       .on('postgres_changes', 
         { event: 'INSERT', schema: 'public', table: 'crm_messages' }, 
         async (payload) => {
            const newMsg = payload.new;
            
-           // Check if we already have this room in our list
            setRooms(prevRooms => {
-               const roomExists = prevRooms.find(r => r.id === newMsg.room_id);
+               // A. Check if we have this room locally
+               const roomIndex = prevRooms.findIndex(r => r.id === newMsg.room_id);
                
-               if (roomExists) {
-                   // UPDATE EXISTING ROOM
-                   return prevRooms.map(r => {
-                       if (r.id === newMsg.room_id) {
-                           // Only increment unread if MSG is NOT from me AND I'm not in the room
-                           const isFromMe = newMsg.sender_id === currentUser.id;
-                           const isUnread = !isFromMe && r.id !== activeRoom;
-                           
-                           return {
-                               ...r,
-                               last_message_at: newMsg.created_at,
-                               unread_count: isUnread 
-                                  ? (r.unread_count || 0) + 1 
-                                  : (isFromMe ? 0 : r.unread_count) // If from me, reset to 0 (implied read)
-                           };
-                       }
-                       return r;
-                   });
-               } else {
-                   // NEW ROOM FOUND (e.g. Incoming DM from someone new)
-                   // We won't add it here inside the setState because we need to fetch it first.
-                   // The async fetch below will handle adding it.
+               if (roomIndex === -1) {
+                   // New Room (e.g. someone DM'd you for the first time) -> Fetch everything to be safe
+                   fetchRooms();
                    return prevRooms;
                }
-           });
 
-           // If we didn't have the room, OR to ensure consistency, we fetch.
-           // Ideally, for a NEW room, we want to fetch just that room to be fast.
-           const { data: newRoomData } = await supabase
-               .from('crm_my_rooms') 
-               .select('*')
-               .eq('id', newMsg.room_id)
-               .single();
+               // B. Update Existing Room
+               const updatedRooms = [...prevRooms];
+               const room = updatedRooms[roomIndex];
+               
+               const isFromMe = newMsg.sender_id === currentUser.id;
+               const isCurrentRoom = room.id === activeRoom;
+               
+               // LOGIC: Increment Red Dot if it's NOT from me AND NOT the active room
+               const shouldIncrement = !isFromMe && !isCurrentRoom;
 
-           if (newRoomData) {
-               const mappedNewRoom = {
-                   id: newRoomData.id,
-                   name: newRoomData.display_name || newRoomData.name,
-                   type: newRoomData.type,
-                   unread_count: newRoomData.unread_count, // Should be at least 1 now if calculated by server, but server view might lag.
-                   avatar_url: newRoomData.display_avatar || newRoomData.avatar_url,
-                   last_message_at: newMsg.created_at, // Trust the message time
-                   created_at: newRoomData.created_at,
-                   dm_target_id: newRoomData.dm_target_id
+               updatedRooms[roomIndex] = {
+                   ...room,
+                   last_message_at: newMsg.created_at,
+                   unread_count: shouldIncrement 
+                       ? (room.unread_count || 0) + 1 
+                       : (isFromMe ? 0 : room.unread_count) // Reset if I replied
                };
 
-               setRooms(prev => {
-                   const exists = prev.find(r => r.id === mappedNewRoom.id);
-                   if (exists) {
-                       // We might have optimistically updated it above, but let's just ensure we have latest View data
-                       // BUT preserve our optimistic unread count if strictly greater (handling race conditions)
-                       return prev.map(r => r.id === mappedNewRoom.id ? { ...mappedNewRoom, unread_count: Math.max(r.unread_count || 0, mappedNewRoom.unread_count || 0) } : r);
-                   } else {
-                       // ADD NEW ROOM
-                       return [mappedNewRoom, ...prev];
-                   }
+               // C. Move to Top
+               updatedRooms.sort((a, b) => {
+                   const tA = new Date(a.last_message_at || 0).getTime();
+                   const tB = new Date(b.last_message_at || 0).getTime();
+                   return tB - tA;
                });
-           } else {
-               // Fallback: Refresh all if specific fetch failed for some reason (RLS?)
-               fetchRooms();
-           }
-        }
-      )
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'crm_read_status', filter: `user_id=eq.${currentUser.id}` },
-        () => {
-            // When I read a message (or mark as read), refresh the room list to clear the red dot
-            // We rely on fetchRooms here as the source of truth for "0"
-            fetchRooms();
+
+               return updatedRooms;
+           });
         }
       )
       .subscribe();
-      
-    // Initial Fetch
-    fetchRooms();
 
     return () => { supabase.removeChannel(channel); };
-  }, [currentUser, activeRoom]); // Add activeRoom dependency to ensure closure has latest state for optimistic check
+  }, [currentUser, activeRoom]); 
 
-  // LOAD MESSAGES (With strict Sender Fetching)
+  // 4. LOAD MESSAGES (Active Room)
   useEffect(() => {
-    if (!activeRoom) return;
+    if (!activeRoom || !currentUser) return;
 
     setIsLoading(true);
     setMessages([]); 
     setHasMore(true);
     
-    // Optimistic: Clear unread count locally instantly
+    // IMMEDIATE LOCAL UPDATE: Clear Red Dot
     setRooms(prev => prev.map(r => r.id === activeRoom ? { ...r, unread_count: 0 } : r));
 
+    // A. Fetch Messages
     supabase.from('crm_messages')
       .select('*, sender:crm_users!sender_id(id, real_name, avatar_url, role)')
       .eq('room_id', activeRoom)
@@ -267,19 +173,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
              setMessages(data.reverse() as any);
              if (data.length < MESSAGES_PER_PAGE) setHasMore(false);
              
-             // --- MARK AS READ (DB - NEW LOGIC) ---
-             // We just update our "Last Read" timestamp for this room
-             if (data.length > 0) {
-                 await supabase.from('crm_read_status').upsert({
-                     user_id: currentUser.id,
-                     room_id: activeRoom,
-                     last_read_at: new Date().toISOString()
-                 });
-             }
+             // B. MARK AS READ (Database)
+             await supabase.from('crm_read_status').upsert({
+                 user_id: currentUser.id,
+                 room_id: activeRoom,
+                 last_read_at: new Date().toISOString()
+             });
          }
          setIsLoading(false);
       });
 
+    // C. Listen for NEW messages in THIS room
     const channel = supabase.channel(`room-${activeRoom}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_messages', filter: `room_id=eq.${activeRoom}` }, 
       async (payload) => {
@@ -287,8 +191,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
          const newMsg = { ...payload.new, sender } as ChatMessage;
          setMessages(prev => [...prev, newMsg]);
          
-         // If I am active in this room (which I am, inside this effect), 
-         // update my read status immediately to now
+         // Mark read immediately since we are looking at it
          if (payload.new.sender_id !== currentUser.id) {
              await supabase.from('crm_read_status').upsert({
                  user_id: currentUser.id,
@@ -300,7 +203,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [activeRoom]);
+  }, [activeRoom, currentUser]); // Added currentUser dependency
 
   const loadMoreMessages = async () => {
       if (!activeRoom || messages.length === 0) return;
@@ -322,6 +225,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const sendMessage = useCallback(async (content: string, files: File[], mentions: string[]) => {
     if (!currentUser || !activeRoom) return;
 
+    // 1. Upload Attachments
     let attachmentUrls: string[] = [];
     if (files.length > 0) {
        for (const file of files) {
@@ -337,6 +241,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
        }
     }
 
+    // 2. Insert Message
     const { error } = await supabase.from('crm_messages').insert({
        room_id: activeRoom,
        sender_id: currentUser.id,
@@ -347,54 +252,46 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (!error) {
-        // Optimistic Update: Move this room to the top instantly
+        // 3. Optimistic Update (Sort List)
         const now = new Date().toISOString();
         setRooms(prev => {
             const updated = prev.map(r => 
                 r.id === activeRoom 
-                ? { ...r, last_message_at: now }
+                ? { ...r, last_message_at: now, unread_count: 0 }
                 : r
             );
-            // Sort immediately to reflect change
             return updated.sort((a, b) => {
-                const tA = new Date(a.last_message_at || a.created_at || 0).getTime();
-                const tB = new Date(b.last_message_at || b.created_at || 0).getTime();
+                const tA = new Date(a.last_message_at || 0).getTime();
+                const tB = new Date(b.last_message_at || 0).getTime();
                 return tB - tA;
             });
         });
-
+        
+        // Update DB timestamp for others
         await supabase.from('crm_chat_rooms').update({ last_message_at: now }).eq('id', activeRoom);
-        if (mentions.length > 0) {
-            const notifs = mentions.map(uid => ({
-                user_id: uid,
-                title: `New Mention from ${currentUser.user_metadata?.real_name || 'Agent'}`,
-                message: content.length > 50 ? content.substring(0, 50) + '...' : content,
-                related_lead_id: activeRoom,
-                is_read: false
-            }));
-            await supabase.from('crm_notifications').insert(notifs);
-        }
     }
   }, [currentUser, activeRoom]);
 
-  // --- DM LOGIC ---
   const createOrOpenDM = async (targetUserId: string) => {
      if (!currentUser) return null;
 
-     // 1. Check if we already have it locally (The View provides it)
-     // DMs have a special name format or we can check participants from view (if we included them)
-     // Since View simplifies participants to just "display_name", we assume 
-     // we might need a server check if not found by name.
-     // For now, let's just do the server check to be safe and canonical.
-
-     // Check if 'dm' exists between these two
-     const { data: existing } = await supabase.rpc('get_dm_room_id', { target_user_id: targetUserId });
-     if (existing) {
-         setActiveRoom(existing);
-         return existing;
+     // 1. Check local cache first (Fastest)
+     const existingRoom = rooms.find(r => r.type === 'dm' && r.dm_target_id === targetUserId);
+     if (existingRoom) {
+         setActiveRoom(existingRoom.id);
+         return existingRoom.id;
      }
 
-     // Create New
+     // 2. Check Server (Double Check)
+     const { data: existingId } = await supabase.rpc('get_dm_room_id', { target_user_id: targetUserId });
+     if (existingId) {
+         // It exists but wasn't in our list (maybe we just joined?), fetch and set
+         await fetchRooms();
+         setActiveRoom(existingId);
+         return existingId;
+     }
+
+     // 3. Create New
      const uniqueName = `dm-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
      const { data: newRoom, error } = await supabase
         .from('crm_chat_rooms')
@@ -407,6 +304,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             { room_id: newRoom.id, user_id: currentUser.id },
             { room_id: newRoom.id, user_id: targetUserId }
         ]);
+        // Force refresh to see the new room
         await fetchRooms();
         setActiveRoom(newRoom.id);
         return newRoom.id;
@@ -414,9 +312,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
      return null;
   };
 
-  // --- NEW: CREATE GROUP ---
   const createGroup = async (name: string, participantIds: string[]) => {
-      if (!currentUser) return;
+      if (!currentUser) return null;
       
       const { data: room, error } = await supabase
         .from('crm_chat_rooms')
@@ -438,7 +335,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <ChatContext.Provider value={{ activeRoom, setActiveRoom, rooms, messages, sendMessage, createOrOpenDM, loadMoreMessages, hasMore, isLoading, currentUser, createGroup } as any}>
+    <ChatContext.Provider value={{ activeRoom, setActiveRoom, rooms, messages, sendMessage, createOrOpenDM, loadMoreMessages, hasMore, isLoading, currentUser, createGroup, allUsers } as any}>
       {children}
     </ChatContext.Provider>
   );
@@ -448,4 +345,4 @@ export const useChatContext = () => {
   const context = useContext(ChatContext);
   if (!context) throw new Error("useChatContext must be used within ChatProvider");
   return context;
-};  
+};

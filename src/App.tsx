@@ -52,6 +52,26 @@ export default function App() {
     }
   }, [selectedLead]);
 
+  // --- NEW: HEARTBEAT SYSTEM (Fixes Online/Offline Status) ---
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const updatePresence = async () => {
+      await supabase
+        .from('crm_users')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', session.user.id);
+    };
+
+    // 1. Update immediately on load
+    updatePresence();
+
+    // 2. Update every 60 seconds
+    const interval = setInterval(updatePresence, 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [session]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);

@@ -32,6 +32,7 @@ export default function ChatSidebar() {
     return () => clearInterval(interval);
   }, [currentUser]);
 
+  // Section 1: Headquarters (Global & Departments)
   const companyRooms = rooms.filter(r => r.type === 'global' || r.type === 'department');
   
   // NOTE: "Teams" (Group chats) are intentionally hidden as per user request (2026-02-12)
@@ -60,7 +61,7 @@ export default function ChatSidebar() {
     if (activeRoom) {
         const room = rooms.find(r => r.id === activeRoom);
         if (room && room.type === 'dm') {
-            // Try to find the other user ID from our known params
+            // Try to find the other user ID from our known params (Smart View Logic)
             if (room.dm_target_id) {
                 setSelectedUserId(room.dm_target_id);
             } else if (room.participants) {
@@ -83,7 +84,7 @@ export default function ChatSidebar() {
 
   // MERGE & SORT USERS
   const sortedUsers = allUsers.map(user => {
-      // Find the DM room for this user
+      // Find the DM room for this user using Smart View ID or Participant check
       const dmRoom = rooms.find(r => 
           r.type === 'dm' && 
           (r.dm_target_id === user.id || r.participants?.some(p => p.user.id === user.id))
@@ -104,7 +105,7 @@ export default function ChatSidebar() {
           interactionTime
       };
   }).sort((a, b) => {
-      // 1. Sort by Time (Descending)
+      // 1. Sort by Time (Descending) - Bumps active chats to top
       if (a.interactionTime !== b.interactionTime) {
           return b.interactionTime - a.interactionTime;
       }
@@ -150,8 +151,6 @@ export default function ChatSidebar() {
             </div>
         </div>
 
-        {/* TEAMS SECTION HIDDEN */}
-
         {/* DIRECT MESSAGES / ALL USERS */}
         <div>
             <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 px-2">People</h3>
@@ -167,7 +166,6 @@ export default function ChatSidebar() {
             </div>
             
             <div className="space-y-1">
-
                 {displayedUsers.length === 0 ? (
                     <div className="px-3 py-2 text-[10px] text-gray-600 italic">
                         {allUsers.length === 0 ? "No users visible (Check RLS)" : "No matches found"}
