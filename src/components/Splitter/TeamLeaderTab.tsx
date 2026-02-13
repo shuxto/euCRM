@@ -18,7 +18,11 @@ export default function TeamLeaderTab() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      const { data: tlData } = await supabase.from('crm_users').select('id, real_name').eq('role', 'team_leader');
+      // FIX: Fetch both 'conversion_leader' and 'retention_leader'
+      const { data: tlData } = await supabase
+        .from('crm_users')
+        .select('id, real_name, role') // Added 'role' to see who is who
+        .in('role', ['conversion_leader', 'retention_leader']);
       if (tlData) setTeamLeaders(tlData);
       const { data: folderData } = await supabase.rpc('get_unassigned_folder_counts');
       if (folderData) setFolders(folderData);
@@ -87,9 +91,13 @@ export default function TeamLeaderTab() {
                     <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${selectedTL === tl.id ? 'bg-indigo-500 text-white' : 'bg-gray-800 text-gray-500'}`}>{tl.real_name.substring(0,2).toUpperCase()}</div>
                         <div className="flex flex-col">
-                            <span className={`text-sm font-bold ${selectedTL === tl.id ? 'text-white' : 'text-gray-400'}`}>{tl.real_name}</span>
-                            {selectedTL === tl.id && <span className="text-[10px] text-indigo-300">Selected Target</span>}
-                        </div>
+    <span className={`text-sm font-bold ${selectedTL === tl.id ? 'text-white' : 'text-gray-400'}`}>{tl.real_name}</span>
+    {/* Show specific role label */}
+    <span className="text-[9px] uppercase font-bold text-gray-500">
+        {tl.role.replace('_', ' ')}
+    </span>
+    {selectedTL === tl.id && <span className="text-[10px] text-indigo-300 mt-0.5">Selected Target</span>}
+</div>
                     </div>
                     {selectedTL === tl.id && <CheckCircle2 size={18} className="text-indigo-500" />}
                 </div>

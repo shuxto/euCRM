@@ -167,25 +167,41 @@ export default function FileManager() {
         let addedCount = 0;
         let skippedCount = 0;
 
+        // --- NEW HELPER: FIND REAL DATA (Case Insensitive) ---
+        // This function looks for "phone", "Phone", "PHONE" in the row and returns the value
+        const getVal = (row: any, target: string) => {
+            const key = Object.keys(row).find(k => k.toLowerCase().trim() === target);
+            return key ? row[key] : '';
+        };
+
         for (const row of rows) {
-          const phone = row.phone ? String(row.phone).replace(/[^0-9]/g, '') : '';
+          // 1. Get Raw Data using the helper
+          const rawPhone = getVal(row, 'phone');
+          const rawEmail = getVal(row, 'email');
+          const rawCountry = getVal(row, 'country');
+          const rawName = getVal(row, 'name');
+          const rawSurname = getVal(row, 'surname');
+
+          // 2. Clean Phone Number
+          const phone = rawPhone ? String(rawPhone).replace(/[^0-9]/g, '') : '';
           
-          // Duplicate Check
+          // 3. Duplicate Check
           if (phone && existingPhones.has(phone)) {
             skippedCount++;
             continue; 
           }
 
-          // Name Logic
+          // 4. Name Logic
           let name = '';
           let surname = '';
 
           if (csvType === 'type_5') {
-            name = row.name || '';
-            surname = row.surname || '';
+            // If file has "Name" and "Surname" columns
+            name = rawName || '';
+            surname = rawSurname || '';
           } else {
-            // Type 4: Split Name
-            const parts = (String(row.name || '')).split(' ');
+            // If file only has "Name" column (Split it)
+            const parts = (String(rawName || '')).split(' ');
             name = parts[0];
             surname = parts.slice(1).join(' ');
           }
@@ -193,9 +209,9 @@ export default function FileManager() {
           batchInsert.push({
             name: name,
             surname: surname,
-            email: row.email,
-            phone: phone,
-            country: row.country,
+            email: rawEmail,      // <--- Now correctly grabbed
+            phone: phone,         // <--- Now correctly grabbed
+            country: rawCountry,  // <--- Now correctly grabbed
             source_file: sourceFile,
             status: 'New',
             created_at: new Date().toISOString()
