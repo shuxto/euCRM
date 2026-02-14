@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'; // Added React
 import { supabase } from '../lib/supabase';
+import { useApp } from '../context/NotificationContext';
 import { 
   UserPlus, PhoneOff, Mic, PhoneForwarded, XCircle, 
   TrendingDown, Clock, Star, Loader2, Activity, 
@@ -43,6 +44,7 @@ const hexToRgba = (hex: string, alpha: number) => {
 
 function StatsGrid({ selectedStatuses, onToggleStatus, currentUserId, role }: StatsGridProps) {
   const [stats, setStats] = useState<any[]>([]);
+  const { currentUser } = useApp();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -68,7 +70,7 @@ function StatsGrid({ selectedStatuses, onToggleStatus, currentUserId, role }: St
 
     window.addEventListener('crm-lead-update', handleInstantUpdate);
     return () => { window.removeEventListener('crm-lead-update', handleInstantUpdate); };
-  }, [currentUserId, role]); 
+  }, [currentUserId, role, currentUser]); // 👈 ADDED currentUser to trigger re-calc
 
   async function fetchData() {
     try {
@@ -79,20 +81,46 @@ function StatsGrid({ selectedStatuses, onToggleStatus, currentUserId, role }: St
         .eq('is_active', true)
         .order('order_index', { ascending: true });
 
-      // 2. Fetch Counts using SERVER-SIDE RPC (Super Fast)
-      // We pass the user ID and role so the DB knows which leads to count
-      const countsQuery = supabase.rpc('get_lead_stats', { 
-        target_user_id: currentUserId || null,
-        user_role: role || 'conversion'
-      });
+      let statusList: any[] | null = [];
+      let countsData: any[] | null = [];
 
-      // 3. Execute in Parallel
-      const [{ data: statusList }, { data: countsData, error }] = await Promise.all([
-          statusQuery,
-          countsQuery
-      ]);
+      // 🔒 MANAGER RESTRICTION: Calculate locally based on Allowed Sources
+      if (role === 'manager') {
+          // A. Fetch Statuses
+          const { data: st } = await statusQuery;
+          statusList = st;
 
-      if (error) throw error;
+          // B. Get Allowed Sources
+          let sources: string[] = [];
+          if (currentUser?.allowed_sources) {
+               if (Array.isArray(currentUser.allowed_sources)) sources = currentUser.allowed_sources;
+               else if (typeof currentUser.allowed_sources === 'string') sources = currentUser.allowed_sources.split(',').map(s => s.trim());
+          }
+
+          // C. Fetch & Count Locally
+          if (sources.length > 0) {
+              const { data: leads } = await supabase
+                  .from('crm_leads')
+                  .select('status')
+                  .in('source_file', sources);
+              
+              // Mock the RPC response format: array of { status, count }
+              // We set count=1 for each row, the reducer below will sum them up.
+              countsData = leads?.map(l => ({ status: l.status, count: 1 })) || [];
+          }
+      } 
+      // 🚀 EVERYONE ELSE: Use Server-Side RPC
+      else {
+          const countsQuery = supabase.rpc('get_lead_stats', { 
+            target_user_id: currentUserId || null,  
+            user_role: role || 'conversion'
+          });
+
+          const [stRes, cntRes] = await Promise.all([statusQuery, countsQuery]);
+          statusList = stRes.data;
+          countsData = cntRes.data;
+          if (cntRes.error) throw cntRes.error;
+      }
       if (!statusList) return;
 
       // 4. Map the DB counts to a simple object: { "New": 10, "FTD": 5 }

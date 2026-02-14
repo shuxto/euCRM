@@ -93,7 +93,7 @@ export default function Sidebar({
     { path: '/shuffle', label: 'Shuffle', icon: Shuffle, roles: ['admin', 'manager', 'team_leader'] },
     { path: '/broadcast', label: 'Broadcast', icon: Radio, roles: ['admin', 'manager'] },
     { path: '/splitter', label: 'Splitter', icon: Split, roles: ['admin', 'manager'] },
-    { path: '/files', label: 'Files', icon: FolderOpen, roles: ['admin', 'manager'] },
+    { path: '/files', label: 'Files', icon: FolderOpen, roles: ['admin'] },
     { path: '/calls', label: 'Call Logs', icon: Phone, roles: ['admin', 'manager'] },
   ];
 

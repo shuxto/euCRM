@@ -129,7 +129,12 @@ export default function AdvancedFilter({ currentFilters, onFilterChange, role = 
             .single();
         
         if (userData?.allowed_sources) {
-            allowedFolders = userData.allowed_sources.split(',').map((s: string) => s.trim());
+            // FIX: Handle both Array and String formats
+            if (Array.isArray(userData.allowed_sources)) {
+                allowedFolders = userData.allowed_sources;
+            } else if (typeof userData.allowed_sources === 'string') {
+                allowedFolders = userData.allowed_sources.split(',').map((s: string) => s.trim());
+            }
         }
       }
 
@@ -167,8 +172,19 @@ export default function AdvancedFilter({ currentFilters, onFilterChange, role = 
           folderOptions = Array.from(mySourceSet);
       }
       
-      // 3. Fetch Countries
-      const { data: cData } = await supabase.from('crm_leads').select('country');
+      // 3. Fetch Countries (Manager Restricted)
+      let countryQuery = supabase.from('crm_leads').select('country');
+
+      if (role === 'manager') {
+          if (allowedFolders.length > 0) {
+              countryQuery = countryQuery.in('source_file', allowedFolders);
+          } else {
+              // Manager with no folders sees no countries
+              countryQuery = countryQuery.eq('id', '00000000-0000-0000-0000-000000000000');
+          }
+      }
+      
+      const { data: cData } = await countryQuery;
       
       // 4. Fetch Agents (USERS) - FILTERED BY ROLE
       let agentQuery = supabase

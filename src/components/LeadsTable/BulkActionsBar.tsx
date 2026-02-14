@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Users, RefreshCw, Download, Trash2, CheckSquare, UserMinus } from 'lucide-react';
+import { useApp } from '../../context/NotificationContext';
 
 interface BulkActionsBarProps {
   selectedCount: number;
@@ -22,8 +23,10 @@ export default function BulkActionsBar({
   onClearSelection, onBulkAssign, onBulkStatus, onBulkDownload, onBulkDeleteStart
 }: BulkActionsBarProps) {
   
-  // Local state for the menus inside the bar
+// Local state for the menus inside the bar
   const [actionMode, setActionMode] = useState<'none' | 'assign' | 'status'>('none');
+  const { currentUser } = useApp();
+  const isManager = currentUser?.role === 'manager';
 
   if (selectedCount === 0) return null;
 
@@ -103,15 +106,17 @@ export default function BulkActionsBar({
                 )}
           </div>
 
-          <button 
-            onClick={onBulkDownload}
-            disabled={isProcessing}
-            className="p-3 rounded-xl hover:bg-white/5 text-gray-300 hover:text-white transition flex items-center gap-2 font-bold text-sm"
-          >
-              <Download size={18} /> CSV
-          </button>
+          {!isManager && (
+            <button 
+                onClick={onBulkDownload}
+                disabled={isProcessing}
+                className="p-3 rounded-xl hover:bg-white/5 text-gray-300 hover:text-white transition flex items-center gap-2 font-bold text-sm"
+            >
+                <Download size={18} /> CSV
+            </button>
+          )}
 
-          {showDelete && (
+          {showDelete && !isManager && (
               <button 
                 onClick={onBulkDeleteStart}
                 disabled={isProcessing}

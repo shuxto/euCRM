@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { GLOBAL_CHAT_ID } from '../constants';
+import type { CRMUser } from '../components/Team/types';
 
 interface AppContextType {
   // Notifications
+  currentUser: CRMUser | null;
   unreadGlobal: number;
   unreadDM: number;
   unreadSupport: number;
@@ -18,6 +20,7 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType>({
+  currentUser: null,
   unreadGlobal: 0,
   unreadDM: 0,
   unreadSupport: 0,
@@ -34,6 +37,7 @@ export const useApp = () => useContext(AppContext);
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [userId, setUserId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<CRMUser | null>(null);
 
   // NOTIFICATION STATE
   const [unreadGlobal, setUnreadGlobal] = useState(0);
@@ -57,6 +61,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setRole(user.user_metadata?.role || 'conversion');
             
             // --- PARALLEL FETCH GLOBAL DATA ---
+            // FETCH FULL USER PROFILE (For Permissions)
+            const { data: userProfile } = await supabase
+                .from('crm_users')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+            
+            if (userProfile) setCurrentUser(userProfile as CRMUser);
             const [
                 { data: rooms },
                 { data: agentData },
@@ -143,6 +155,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider value={{ 
         unreadGlobal, unreadDM, unreadSupport, 
+        currentUser,
         clearGlobal, clearDM, decrementUnreadDM, 
         agents, statuses, isDataLoaded 
     }}>

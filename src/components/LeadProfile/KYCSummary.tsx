@@ -106,6 +106,19 @@ export default function KYCSummary({ lead }: Props) {
 
         if (crmError) throw new Error("Failed to update CRM");
 
+        // --- NEW: AUTO-CREATE TRADING ROOM ---
+        if (!isCurrentlyVerified) {
+            const { data: existing } = await supabase.from('trading_accounts').select('id').eq('user_id', lead.trading_account_id).limit(1);
+            if (!existing || existing.length === 0) {
+                 await supabase.from('trading_accounts').insert({ 
+                     user_id: lead.trading_account_id, 
+                     name: 'Main Account', 
+                     balance: 0, 
+                     is_demo: false 
+                 });
+            }
+        }
+
         // C. Refresh UI
         window.dispatchEvent(new CustomEvent('crm-open-lead-id', { detail: lead.id }));
 

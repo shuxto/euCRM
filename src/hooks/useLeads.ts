@@ -27,6 +27,8 @@ export interface Agent {
 
 export function useLeads(filters: any, currentUserId?: string) {
   const { agents: globalAgents, statuses: globalStatuses } = useApp(); 
+  // 1. GET USER CONTEXT
+  const { currentUser, isDataLoaded } = useApp();
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [totalCount, setTotalCount] = useState(0); 
@@ -38,11 +40,39 @@ export function useLeads(filters: any, currentUserId?: string) {
     setLoading(true);
 
     try {
+
+        // 🔒 SECURITY GATE: If we don't know the user yet, DON'T FETCH.
+        // This prevents the "Flash of Unrestricted Data" bug.
+        if (!currentUser) {
+             // Only stop if we are truly waiting for data. 
+             // If data is loaded and user is still null, it means they aren't logged in (handled elsewhere).
+             if (!isDataLoaded) return; 
+        }
+
         // 1. BUILD QUERY (Optimized Select)
         let leadQuery = supabase.from('crm_leads')
             .select('id, name, surname, country, status, kyc_status, phone, email, created_at, source_file, assigned_to, note_count, callback_time, trading_account_id', { count: 'exact' }) 
             .order('created_at', { ascending: false })
             .order('id', { ascending: false });
+
+            // 🔒 MANAGER RESTRICTION 🔒
+        if (currentUser?.role === 'manager') {
+            const allowed = currentUser.allowed_sources;
+            
+            // Handle CSV String "Google, Facebook"
+            if (typeof allowed === 'string' && allowed.length > 0) {
+                const list = allowed.split(',').map(s => s.trim());
+                leadQuery = leadQuery.in('source_file', list);
+            } 
+            // Handle Array ["Google", "Facebook"]
+            else if (Array.isArray(allowed) && allowed.length > 0) {
+                leadQuery = leadQuery.in('source_file', allowed);
+            }
+            // Block everything if no sources allowed
+            else {
+                leadQuery = leadQuery.eq('id', '00000000-0000-0000-0000-000000000000');
+            }
+        }
 
         // Apply Filters to Lead Query
         if (filters) {
@@ -122,7 +152,7 @@ export function useLeads(filters: any, currentUserId?: string) {
       
     return () => { supabase.removeChannel(leadSub); };
     
-  }, [JSON.stringify(filters), currentUserId]); 
+  }, [JSON.stringify(filters), currentUserId, currentUser, isDataLoaded]); // 👈 FIXED: currentUser is INSIDE the brackets
 
   // --- ACTIONS (Untouched) ---
   const updateLocalLead = (id: string, updates: Partial<Lead>) => {
